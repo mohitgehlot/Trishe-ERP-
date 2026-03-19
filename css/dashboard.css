@@ -1,0 +1,185 @@
+/* ===========================================
+   TRISHE ERP - FULLY RESPONSIVE DASHBOARD
+=========================================== */
+:root {
+    --primary: #10b981;    /* Trishe Green */
+    --accent: #3b82f6;     /* Blue */
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --text-main: #18181b;
+    --text-muted: #71717a;
+    --bg-body: #ffffff;    /* Clean White */
+    --card-bg: #ffffff;
+    --border: #e4e4e7;
+    --radius: 12px;
+}
+
+/* 📱 MOBILE-FIRST BASE STYLES */
+body {
+    background-color: var(--bg-body);
+    font-family: 'Inter', sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+/* Shell Layout: Sidebar ke side me content lane ke liye */
+.shell {
+    display: flex;
+    flex-direction: column; /* Mobile me niche-upar */
+    gap: 20px;
+    padding: 15px;
+    width: 100%;
+}
+
+/* 📊 STAT CARDS: Grid for Responsiveness */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr); /* Mobile me 2 columns */
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.stat-card {
+    background: var(--card-bg);
+    padding: 20px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    text-align: left;
+    position: relative;
+    transition: transform 0.2s;
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-main);
+    display: block;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.stat-subtext {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 5px;
+}
+
+/* 📈 MAIN INNER (Chart & Table) */
+.main-inner {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* ⚡ QUICK ACTIONS (Buttons) */
+.quick-actions {
+    display: grid;
+    grid-template-columns: 1fr; /* Mobile me 1 column */
+    gap: 10px;
+}
+
+.action-btn {
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    padding: 14px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: var(--text-main);
+    font-size: 0.9rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* 📄 TABLE RESPONSIVE */
+.table-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 15px;
+    overflow: hidden;
+}
+
+.table-responsive {
+    overflow-x: auto; /* Table scroll on mobile */
+    -webkit-overflow-scrolling: touch;
+}
+
+.data-table {
+    width: 100%;
+    min-width: 600px; /* Force scroll if screen is too small */
+    border-collapse: collapse;
+}
+
+.data-table th {
+    background: #f9fafb;
+    padding: 12px;
+    text-align: left;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.data-table td {
+    padding: 12px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.85rem;
+}
+
+/* 🛑 RIGHT SIDEBAR (Low Stock) */
+.right-side {
+    width: 100%;
+}
+
+.management-section {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+}
+
+/* ===========================================
+   💻 DESKTOP STYLES (Screen > 992px)
+=========================================== */
+@media (min-width: 992px) {
+    .shell {
+        flex-direction: row; /* Sidebar ke side me dashboard */
+        padding: 25px;
+        align-items: flex-start;
+    }
+
+    .main-inner {
+        flex: 1; /* Bacha hua space chart/table ko milega */
+    }
+
+    .right-side {
+        width: 320px; /* Side me fix width */
+    }
+
+    .dashboard-grid {
+        grid-template-columns: repeat(6, 1fr); /* Desktop me 6 columns */
+    }
+
+    .stat-value {
+        font-size: 2rem;
+    }
+
+    .quick-actions {
+        grid-template-columns: repeat(4, 1fr); /* Buttons side-by-side */
+    }
+}
+
+/* Tab Colors & Icons */
+.stat-card.warning { border-top: 4px solid var(--warning); }
+.stat-card.success { border-top: 4px solid var(--primary); }
+.stat-card.danger { border-top: 4px solid var(--danger); }
+.badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; }
+.bg-success { background: #dcfce7; color: #166534; }
+.bg-warning { background: #fef3c7; color: #92400e; }

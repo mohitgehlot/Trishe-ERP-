@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Sitemap: https://klmjfram.in/sitemap.xml
+Sitemap: https://klmjfram.in/start.php?sitemap.xml

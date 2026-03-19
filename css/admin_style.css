@@ -1,0 +1,27 @@
+/* ROOT VARIABLES */
+        :root {
+            --purple: #8b5cf6;
+            --accent: #4f8ef7;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --black: #0f172a;
+            --white: #f8fafc;
+            --glass: rgba(30, 41, 59, 0.95);
+            --radius: 14px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #f1f5f9;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }

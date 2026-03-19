@@ -1,0 +1,140 @@
+*{
+    box-sizing:border-box;
+    font-family:"Segoe UI",sans-serif;
+}
+
+
+
+.container{
+    padding:16px;
+}
+
+
+/* ===================== */
+/* 🔷 TOP CARDS */
+/* ===================== */
+.cards{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:16px;
+    margin-top:10px;
+}
+
+/* cards */
+.card{
+    border-radius:18px;
+    padding:18px;
+    min-height:110px;
+    color:#0f172a;
+}
+
+.card h4{
+    margin:0;
+    font-size:13px;
+    font-weight:500;
+    opacity:.8;
+}
+
+.card h2{
+    margin-top:10px;
+    font-size:26px;
+}
+
+/* pastel-dark compatible */
+.pink{background:linear-gradient(135deg,#ffb3c6,#ff6f91);}
+.green{background:linear-gradient(135deg,#b7f7d4,#34d399);}
+.orange{background:linear-gradient(135deg,#ffe2b7,#f59e0b);}
+.blue{background:linear-gradient(135deg,#bfdbfe,#3b82f6);}
+
+/* ===================== */
+/* 📐 MAIN GRID */
+/* ===================== */
+.grid{
+    display:grid;
+    grid-template-columns:2fr 1fr;
+    gap:18px;
+    margin-top:20px;
+}
+
+/* ===================== */
+/* 📦 BOX */
+/* ===================== */
+.box{
+    background:#020617;
+    border-radius:18px;
+    padding:16px;
+    box-shadow:0 10px 25px rgba(0,0,0,.4);
+}
+
+.box h3{
+    margin:0 0 12px 0;
+    font-size:15px;
+    font-weight:600;
+    color:#e5e7eb;
+}
+
+/* ===================== */
+/* 📊 TABLE */
+/* ===================== */
+.table-wrap{
+    width:100%;
+    overflow-x:auto;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    min-width:520px;
+}
+
+th{
+    text-align:left;
+    font-size:12px;
+    color:#94a3b8;
+    padding:10px;
+    border-bottom:1px solid #1e293b;
+}
+
+td{
+    padding:10px;
+    font-size:13px;
+    border-bottom:1px solid #1e293b;
+    white-space:nowrap;
+}
+
+/* ===================== */
+/* 🔘 BUTTON */
+/* ===================== */
+.btn{
+    display:inline-block;
+    background:#22c55e;
+    border:none;
+    padding:8px 14px;
+    color:#022c22;
+    border-radius:8px;
+    cursor:pointer;
+    font-size:13px;
+    text-decoration:none;
+}
+
+.btn.blue{background:#3b82f6;color:#020617;}
+.btn.red{background:#ef4444;color:#020617;}
+
+/* ===================== */
+/* 📈 CHART */
+/* ===================== */
+.chart{
+    height:240px;
+    border-radius:14px;
+    background:linear-gradient(180deg,#020617,#020617);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:#64748b;
+}
+
+/* ========================= */
+/* 📱 RESPONSIVE */
+/* ========================= */
+
+

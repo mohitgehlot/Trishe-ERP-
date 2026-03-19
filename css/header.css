@@ -1,0 +1,295 @@
+/* admin_header.css - Modern Glassmorphism Header for Dashboard */
+.header {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 1400px;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.header .flex {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.logo img {
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    transition: transform 0.3s ease;
+}
+
+.logo:hover img {
+    transform: scale(1.05);
+}
+
+/* DESKTOP NAVBAR - Fixed Left Sidebar Style */
+.navbar {
+    display: flex;
+    gap: 2px;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(15px);
+    border-radius: 12px;
+    padding: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.navbar a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    color: rgba(255, 255, 255, 0.9);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 14px;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    position: relative;
+    overflow: hidden;
+}
+
+.navbar a::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.5s;
+}
+
+.navbar a:hover::before {
+    left: 100%;
+}
+
+.navbar a:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-2px);
+    color: #ffffff;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+.navbar a.active {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(37, 99, 235, 0.3));
+    color: #ffffff;
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+}
+
+/* ICONS */
+.icons {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+#menu-btn, #user-btn {
+    font-size: 20px;
+    width: 45px;
+    height: 45px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+#menu-btn:hover, #user-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* ACCOUNT BOX */
+.account-box {
+    position: absolute;
+    top: 100%;
+    right: 20px;
+    width: 320px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.3s ease;
+    margin-top: 10px;
+    z-index: 1001;
+}
+
+.account-box.active {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.profile-card {
+    padding: 25px;
+}
+
+.profile-image img {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    margin: 0 auto 15px;
+    display: block;
+}
+
+.profile-header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.username {
+    color: #ffffff;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 5px;
+}
+
+.user-email {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 14px;
+}
+
+.logout-btn {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+    text-decoration: none;
+    text-align: center;
+    border-radius: 12px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.logout-btn:hover {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(239, 68, 68, 0.4);
+}
+
+/* MOBILE RESPONSIVE - HAMBURGER MENU */
+@media (max-width: 992px) {
+    .header {
+        left: 0;
+        transform: none;
+        padding: 0 10px;
+    }
+
+    .navbar {
+        position: fixed;
+        left: -100%;
+        top: 100%;
+        width: 280px;
+        height: calc(100vh - 70px);
+        flex-direction: column;
+        background: rgba(30, 27, 75, 0.98);
+        backdrop-filter: blur(30px);
+        border-radius: 0 20px 20px 0;
+        border-left: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 4px 0 30px rgba(0, 0, 0, 0.4);
+        padding: 20px;
+        overflow-y: auto;
+        transition: left 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+
+    .navbar.active {
+        left: 0;
+    }
+
+    .navbar a {
+        padding: 16px 20px;
+        margin-bottom: 8px;
+        border-radius: 15px;
+        font-size: 16px;
+        justify-content: flex-start;
+    }
+
+    .navbar a:hover {
+        transform: translateX(8px);
+        padding-left: 28px;
+    }
+
+    #menu-btn {
+        display: flex !important;
+    }
+
+    .account-box {
+        right: 10px;
+        width: 280px;
+        left: auto;
+    }
+}
+
+@media (max-width: 768px) {
+    .header .flex {
+        padding: 12px 15px;
+    }
+
+    .navbar {
+        width: 100%;
+        left: -100%;
+        border-radius: 0;
+    }
+
+    .account-box {
+        right: 15px;
+        width: calc(100% - 30px);
+        left: 15px;
+    }
+}
+
+/* SCROLLBAR STYLING */
+.navbar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.navbar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+}
+
+.navbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+}
+
+.navbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* ACTIVE PAGE INDICATOR */
+.navbar a.active::after {
+    content: '';
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 20px;
+    background: var(--accent);
+    border-radius: 2px;
+}
