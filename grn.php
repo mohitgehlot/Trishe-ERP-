@@ -1,5 +1,5 @@
 <?php
-// grn_intake.php - Complete Modern Version with Sticker Printing
+// grn_intake.php - MASTER CSS INTEGRATED
 include 'config.php';
 session_start();
 
@@ -31,179 +31,59 @@ while ($row = $result->fetch_assoc()) {
 <head>
     <meta charset="UTF-8">
     <title>New GRN Entry | Trishe Agro</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="css/admin_style.css">
 
     <style>
-        /* VARIABLES & RESET */
-        :root {
-            --primary: #4f46e5;
-            --primary-dark: #4338ca;
-            --primary-light: #eef2ff;
-            --bg-body: #f1f5f9;
-            --bg-card: #ffffff;
-            --text-main: #0f172a;
-            --text-secondary: #64748b;
-            --border: #e2e8f0;
-            --input-bg: #ffffff;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-            --radius: 10px;
-            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            --transition: all 0.2s ease-in-out;
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-body);
-            color: var(--text-main);
-            margin: 0;
-            padding-bottom: 80px;
-            line-height: 1.5;
-            font-size: 14px;
-        }
-
         .container {
+            max-width: 1400px;
             margin: 0 auto;
-            padding: 10px;
-            transition: margin-left 0.3s ease;
+            padding: 20px;
+            overflow-x: hidden;
         }
 
-        @media (max-width: 992px) {
-            .container {
-                margin-left: 0;
-                padding: 10px;
-                max-width: 100%;
-            }
-        }
-
-        .page-header {
+        .page-header-box {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            margin-bottom: 25px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 24px;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 15px;
         }
 
         .page-title {
             font-size: 1.5rem;
             font-weight: 700;
             color: var(--text-main);
+            margin: 0;
             display: flex;
             align-items: center;
             gap: 10px;
-        }
-
-        .page-title i {
-            color: var(--primary);
         }
 
         .grid-layout {
             display: grid;
             grid-template-columns: 1fr 1.5fr;
-            gap: 10px;
+            gap: 24px;
             align-items: start;
-        }
-
-        @media (max-width: 1024px) {
-            .grid-layout {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .card {
-            background: var(--bg-card);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            border: 1px solid var(--border);
-            margin-bottom: 20px;
-            overflow: hidden;
-        }
-
-        .card-header {
-            padding: 8px 10px;
-            background: #f8fafc;
-            border-bottom: 1px solid var(--border);
-            font-weight: 600;
-            font-size: 1rem;
-            color: var(--text-main);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .card-header i {
-            color: var(--text-secondary);
-        }
-
-        .card-body {
-            padding: 10px;
-        }
-
-        @media (max-width: 480px) {
-            .card-body {
-                padding: 15px;
-            }
         }
 
         .form-grid {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr 1fr;
             gap: 16px;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
         }
 
-        @media (max-width: 576px) {
-            .form-grid {
-                grid-template-columns: 1fr 1fr;
-                gap: 12px;
-            }
-        }
-
-        .form-group {
-            margin-bottom: 16px;
-            position: relative;
-        }
-
-        .form-group label {
-            display: block;
-            font-size: 0.85rem;
-            font-weight: 600;
-            margin-bottom: 6px;
-            color: var(--text-secondary);
-        }
-
-        .form-control {
-            width: 100%;
-            padding: 10px 14px;
-            font-size: 1rem;
-            color: var(--text-main);
-            background-color: var(--input-bg);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            transition: var(--transition);
-            appearance: none;
-        }
-
-        .form-control:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
-        }
-
-        .form-control[readonly] {
-            background-color: #f1f5f9;
-            color: var(--text-secondary);
-            cursor: not-allowed;
-        }
-
+        /* Specific styles for Autocomplete */
         .autocomplete-wrapper {
             position: relative;
         }
@@ -236,21 +116,21 @@ while ($row = $result->fetch_assoc()) {
 
         .suggestion-item:hover,
         .suggestion-item.active {
-            background-color: var(--primary-light);
+            background-color: #e0e7ff;
             color: var(--primary);
         }
 
         .suggestion-meta {
             font-size: 0.8rem;
-            color: var(--text-secondary);
+            color: var(--text-muted);
             margin-top: 2px;
         }
 
         .seller-history-box {
-            background-color: var(--primary-light);
-            border: 1px solid #c7d2fe;
+            background-color: #eff6ff;
+            border: 1px dashed #bfdbfe;
             border-radius: 8px;
-            padding: 12px 16px;
+            padding: 15px;
             margin-top: 5px;
             margin-bottom: 20px;
             display: none;
@@ -260,18 +140,17 @@ while ($row = $result->fetch_assoc()) {
         .history-stats {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 8px;
-            font-size: 0.9rem;
-            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+            font-weight: 700;
             color: var(--text-main);
         }
 
         .view-history-btn {
             font-size: 0.85rem;
             color: var(--primary);
-            font-weight: 600;
+            font-weight: 700;
             cursor: pointer;
-            text-decoration: none;
             display: inline-flex;
             align-items: center;
             gap: 5px;
@@ -281,212 +160,58 @@ while ($row = $result->fetch_assoc()) {
             text-decoration: underline;
         }
 
-        .badge {
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .badge-warning {
-            background-color: #fef3c7;
-            color: #b45309;
-        }
-
-        .badge-success {
-            background-color: #d1fae5;
-            color: #047857;
-        }
-
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 0.95rem;
-            cursor: pointer;
-            transition: var(--transition);
-            border: none;
-            text-decoration: none;
-            gap: 8px;
-        }
-
-        @media (max-width: 576px) {
-            .btn {
-                width: 100%;
-                margin-bottom: 10px;
-            }
-
-            .page-header .btn {
-                width: auto;
-                margin-bottom: 0;
-            }
-        }
-
-        .btn-primary {
-            background-color: var(--primary);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background-color: var(--primary-dark);
-            transform: translateY(-1px);
-        }
-
-        .btn-success {
-            background-color: var(--success);
-            color: white;
-        }
-
-        .btn-success:hover {
-            filter: brightness(90%);
-            transform: translateY(-1px);
-        }
-
-        .btn-danger {
-            background-color: var(--danger);
-            color: white;
-            padding: 6px 12px;
-            font-size: 0.85rem;
-        }
-
-        .btn-danger:hover {
-            background-color: #dc2626;
-        }
-
-        .btn-outline {
-            background: white;
-            border: 1px solid var(--border);
-            color: var(--text-main);
-        }
-
-        .btn-outline:hover {
-            background-color: #f8fafc;
-            border-color: var(--text-secondary);
-        }
-
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .table-wrapper {
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            overflow-x: auto;
-            background: white;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 650px;
-        }
-
-        th {
-            background-color: #f8fafc;
-            color: var(--text-secondary);
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 0.75rem;
-            letter-spacing: 0.05em;
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--border);
-            text-align: left;
-        }
-
-        td {
-            padding: 14px 16px;
-            border-bottom: 1px solid var(--border);
-            color: var(--text-main);
-            vertical-align: middle;
-        }
-
-        tr:last-child td {
-            border-bottom: none;
-        }
-
-        .tfoot-row td {
-            background-color: #f8fafc;
-            font-weight: 700;
-            color: var(--text-main);
-            border-top: 2px solid var(--border);
-            font-size: 1rem;
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 2000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(4px);
-        }
-
-        .modal-content {
-            background: white;
-            margin: 5vh auto;
-            padding: 0;
-            width: 90%;
-            max-width: 800px;
-            border-radius: 12px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-            animation: slideUp 0.3s ease-out;
-            max-height: 90vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        @keyframes slideUp {
-            from {
-                transform: translateY(20px);
-                opacity: 0;
-            }
-
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-
-        .modal-content h3 {
-            margin: 0;
-            padding: 20px;
-            border-bottom: 1px solid var(--border);
-            font-size: 1.25rem;
-        }
-
-        .close-modal {
-            position: absolute;
-            right: 20px;
-            top: 20px;
-            font-size: 24px;
-            color: var(--text-secondary);
-            cursor: pointer;
-            line-height: 1;
-        }
-
         .manual-link {
             color: var(--primary);
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             cursor: pointer;
             text-decoration: underline;
             display: inline-block;
             margin-top: 8px;
-            font-weight: 500;
+            font-weight: 600;
         }
 
         #line_total {
             color: var(--primary);
             font-weight: 800;
+            font-size: 1.2rem;
+        }
+
+        @media (max-width: 1024px) {
+            .grid-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding-left: 0;
+            }
+
+            .container {
+                padding: 15px;
+            }
+
+            .page-header-box {
+                flex-direction: column;
+                align-items: stretch;
+                text-align: center;
+            }
+
+            .page-header-box .btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -496,14 +221,10 @@ while ($row = $result->fetch_assoc()) {
     <?php include 'admin_header.php'; ?>
 
     <div class="container">
-        <div class="page-header">
-            <div class="page-title">
-                <i class="fas fa-truck-loading"></i>
-                GRN Entry (Raw Material)
-            </div>
-            <a href="inventory.php" class="btn btn-outline">
-                <i class="fas fa-arrow-left"></i> Back
-            </a>
+
+        <div class="page-header-box">
+            <h1 class="page-title"><i class="fas fa-truck-loading text-primary"></i> GRN Entry (Raw Material)</h1>
+            <a href="inventory.php" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Back to Inventory</a>
         </div>
 
         <form id="grnForm" autocomplete="off">
@@ -514,43 +235,43 @@ while ($row = $result->fetch_assoc()) {
             <div class="grid-layout">
 
                 <div class="left-col">
-                    <div class="card">
-                        <div class="card-header"><i class="fas fa-user"></i> Seller Information</div>
-                        <div class="card-body">
+                    <div class="card" style="margin-bottom: 24px;">
+                        <div class="card-header"><i class="fas fa-user text-primary"></i> Seller Information</div>
+                        <div style="padding: 20px;">
 
                             <div class="form-group autocomplete-wrapper">
-                                <label>Seller Name *</label>
-                                <input type="text" id="seller_name" name="seller_name" class="form-control" placeholder="Search seller..." required>
+                                <label class="form-label">Seller Name *</label>
+                                <input type="text" id="seller_name" name="seller_name" class="form-input" placeholder="Search seller..." required>
                                 <div id="seller_list" class="autocomplete-list"></div>
-                                <small id="new_seller_hint" style="display:none; color:var(--warning); margin-top:5px;">
-                                    <i class="fas fa-plus-circle"></i> New Seller will be created.
+                                <small id="new_seller_hint" style="display:none; color:var(--warning); margin-top:5px; font-weight:600;">
+                                    <i class="fas fa-plus-circle"></i> New Seller will be created automatically.
                                 </small>
                             </div>
 
                             <div id="seller_history_widget" class="seller-history-box">
                                 <div class="history-stats">
-                                    <span>Total Orders: <strong id="hist_count">0</strong></span>
-                                    <span>Total Value: <strong>₹<span id="hist_val">0</span></strong></span>
+                                    <span>Total Orders: <strong id="hist_count" style="color:var(--primary);">0</strong></span>
+                                    <span>Total Value: <strong style="color:var(--success);">₹<span id="hist_val">0</span></strong></span>
                                 </div>
                                 <div class="view-history-btn" onclick="openHistoryModal()">
                                     <i class="fas fa-eye"></i> View Previous Transactions
                                 </div>
                             </div>
 
-                            <div class="form-grid">
+                            <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
                                 <div class="form-group">
-                                    <label>Vehicle No *</label>
-                                    <input type="text" id="vehicle_no" name="vehicle_no" class="form-control" placeholder="RJ-XX-0000" required style="text-transform: uppercase;">
+                                    <label class="form-label">Vehicle No *</label>
+                                    <input type="text" id="vehicle_no" name="vehicle_no" class="form-input" placeholder="RJ-XX-0000" required style="text-transform: uppercase;">
                                 </div>
                                 <div class="form-group">
-                                    <label>Phone Number</label>
-                                    <input type="text" id="phone" name="phone" class="form-control" placeholder="Mobile No" readonly>
+                                    <label class="form-label">Phone Number</label>
+                                    <input type="text" id="phone" name="phone" class="form-input" placeholder="Mobile No" readonly style="background:#f8fafc; color:var(--text-muted);">
                                 </div>
                             </div>
 
                             <div class="form-group">
-                                <label>Address</label>
-                                <input type="text" id="seller_address" name="seller_address" class="form-control" placeholder="Village / City" readonly>
+                                <label class="form-label">Address</label>
+                                <input type="text" id="seller_address" name="seller_address" class="form-input" placeholder="Village / City" readonly style="background:#f8fafc; color:var(--text-muted);">
                             </div>
 
                             <div style="text-align:right;">
@@ -562,12 +283,12 @@ while ($row = $result->fetch_assoc()) {
                     </div>
 
                     <div class="card">
-                        <div class="card-header"><i class="fas fa-wallet"></i> Payment Details</div>
-                        <div class="card-body">
-                            <div class="form-grid">
+                        <div class="card-header"><i class="fas fa-wallet text-success"></i> Payment Details</div>
+                        <div style="padding: 20px;">
+                            <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
                                 <div class="form-group">
-                                    <label>Payment Mode</label>
-                                    <select id="payment_mode" name="payment_mode" class="form-control">
+                                    <label class="form-label">Payment Mode</label>
+                                    <select id="payment_mode" name="payment_mode" class="form-input">
                                         <option value="Pending">Credit (Pending)</option>
                                         <option value="Cash">Cash</option>
                                         <option value="Bank Transfer">Bank Transfer</option>
@@ -576,19 +297,19 @@ while ($row = $result->fetch_assoc()) {
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label>Date</label>
-                                    <input type="date" id="payment_date" name="payment_date" class="form-control" value="<?= date('Y-m-d') ?>">
+                                    <label class="form-label">Date</label>
+                                    <input type="date" id="payment_date" name="payment_date" class="form-input" value="<?= date('Y-m-d') ?>">
                                 </div>
                             </div>
 
                             <div class="form-group">
-                                <label>Ref No / Remarks</label>
-                                <input type="text" id="payment_ref" name="payment_ref" class="form-control" placeholder="Transaction ID or Notes">
+                                <label class="form-label">Ref No / Remarks</label>
+                                <input type="text" id="payment_ref" name="payment_ref" class="form-input" placeholder="Transaction ID or Notes">
                             </div>
 
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <span style="font-size:0.9rem; font-weight:600;">Status:</span>
-                                <span id="pay_status_badge" class="badge badge-warning">Unpaid</span>
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px; padding-top:15px; border-top:1px dashed var(--border);">
+                                <span style="font-size:0.95rem; font-weight:700; color:var(--text-main);">Status:</span>
+                                <span id="pay_status_badge" class="badge st-pending" style="padding:6px 12px; font-size:0.85rem;">Unpaid (Credit)</span>
                             </div>
                         </div>
                     </div>
@@ -597,63 +318,63 @@ while ($row = $result->fetch_assoc()) {
 
                 <div class="right-col">
 
-                    <div class="card">
-                        <div class="card-header"><i class="fas fa-seedling"></i> Add Seeds</div>
-                        <div class="card-body">
+                    <div class="card" style="margin-bottom: 24px;">
+                        <div class="card-header"><i class="fas fa-seedling text-warning"></i> Add Seeds</div>
+                        <div style="padding: 20px;">
 
                             <div class="form-group autocomplete-wrapper">
-                                <label>Select Seed (Type to search) *</label>
-                                <input type="text" id="seed_search" class="form-control" placeholder="e.g. Mustard, Peanut...">
+                                <label class="form-label">Select Seed (Type to search) *</label>
+                                <input type="text" id="seed_search" class="form-input" placeholder="e.g. Mustard, Peanut...">
                                 <input type="hidden" id="selected_seed_id">
                                 <div id="seed_list" class="autocomplete-list"></div>
                             </div>
 
                             <div class="form-grid">
                                 <div class="form-group">
-                                    <label>Category</label>
-                                    <input type="text" id="seed_category" class="form-control" readonly tabindex="-1">
+                                    <label class="form-label">Category</label>
+                                    <input type="text" id="seed_category" class="form-input" readonly tabindex="-1" style="background:#f8fafc; color:var(--text-muted);">
                                 </div>
                                 <div class="form-group">
-                                    <label>Last Price (Ref)</label>
-                                    <input type="text" id="last_price" class="form-control" readonly tabindex="-1">
+                                    <label class="form-label">Last Price (Ref)</label>
+                                    <input type="text" id="last_price" class="form-input" readonly tabindex="-1" style="background:#f8fafc; color:var(--text-muted);">
                                 </div>
                                 <div class="form-group">
-                                    <label>Quality Grade</label>
-                                    <select id="seed_quality" class="form-control">
+                                    <label class="form-label">Quality Grade</label>
+                                    <select id="seed_quality" class="form-input">
                                         <option value="A">Grade A (Best)</option>
                                         <option value="B">Grade B (Good)</option>
-                                        <option value="C">Grade C (Average)</option>
+                                        <option value="C">Grade C (Avg)</option>
                                         <option value="D">Grade D (Low)</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label>No. of Bags</label>
-                                    <input type="number" id="seed_bags" class="form-control" placeholder="0">
+                                    <label class="form-label">No. of Bags</label>
+                                    <input type="number" id="seed_bags" class="form-input" placeholder="0">
                                 </div>
                                 <div class="form-group">
-                                    <label>Price (₹/Qtl) *</label>
-                                    <input type="number" id="seed_price" class="form-control" step="0.01" placeholder="0.00">
+                                    <label class="form-label">Price (₹/Qtl) *</label>
+                                    <input type="number" id="seed_price" class="form-input" step="0.01" placeholder="0.00">
                                 </div>
                                 <div class="form-group">
-                                    <label>Weight (Kg) *</label>
-                                    <input type="number" id="seed_weight" class="form-control" step="0.01" placeholder="0.00">
+                                    <label class="form-label">Weight (Kg) *</label>
+                                    <input type="number" id="seed_weight" class="form-input" step="0.01" placeholder="0.00">
                                 </div>
                             </div>
 
-                            <div class="form-group" style="text-align:right; font-size:1.1rem; font-weight:bold; color:var(--primary);">
+                            <div class="form-group" style="text-align:right; font-size:1.1rem; font-weight:700; color:var(--text-main); margin-top:10px;">
                                 Line Total: ₹ <span id="line_total">0.00</span>
                             </div>
 
-                            <button type="button" id="add_item_btn" class="btn btn-primary" style="width:100%;">
-                                <i class="fas fa-plus"></i> Add Item to List
+                            <button type="button" id="add_item_btn" class="btn btn-outline" style="width:100%; border-color:var(--primary); color:var(--primary); margin-top:10px;">
+                                <i class="fas fa-plus-circle"></i> Add Item to List
                             </button>
 
                         </div>
                     </div>
 
                     <div class="card">
-                        <div class="card-header"><i class="fas fa-list"></i> Items List</div>
-                        <div class="table-wrapper">
+                        <div class="card-header"><i class="fas fa-list text-info"></i> Items List</div>
+                        <div class="table-wrap" style="border:none; box-shadow:none; border-radius:0;">
                             <table>
                                 <thead>
                                     <tr>
@@ -667,14 +388,14 @@ while ($row = $result->fetch_assoc()) {
                                 </thead>
                                 <tbody id="items_table_body">
                                     <tr>
-                                        <td colspan="6" style="text-align:center; color:#999; padding:20px;">No items added</td>
+                                        <td colspan="6" style="text-align:center; color:var(--text-muted); padding:30px;">No items added yet.</td>
                                     </tr>
                                 </tbody>
                                 <tfoot>
-                                    <tr class="tfoot-row">
-                                        <td colspan="3" style="text-align:right;">Grand Total:</td>
-                                        <td id="grand_weight">0.00 Kg</td>
-                                        <td id="grand_value">₹ 0.00</td>
+                                    <tr style="background:#f8fafc; border-top:2px solid var(--border);">
+                                        <td colspan="3" style="text-align:right; font-weight:800;">Grand Total:</td>
+                                        <td id="grand_weight" style="font-weight:700;">0.00 Kg</td>
+                                        <td id="grand_value" style="font-weight:800; color:var(--success);">₹ 0.00</td>
                                         <td></td>
                                     </tr>
                                 </tfoot>
@@ -682,7 +403,7 @@ while ($row = $result->fetch_assoc()) {
                         </div>
                     </div>
 
-                    <button type="submit" id="submit_grn_btn" class="btn btn-success" style="width:100%; padding:15px; font-size:1.1rem; margin-top:10px;">
+                    <button type="submit" id="submit_grn_btn" class="btn btn-primary" style="width:100%; padding:15px; font-size:1.1rem; margin-top:24px; background:var(--success); border-color:var(--success);">
                         <i class="fas fa-check-circle"></i> Save GRN Entry
                     </button>
 
@@ -691,23 +412,27 @@ while ($row = $result->fetch_assoc()) {
         </form>
     </div>
 
-    <div id="historyModal" class="modal">
-        <div class="modal-content">
-            <span class="close-modal" onclick="closeHistoryModal()">&times;</span>
-            <h3 style="margin-top:0;">Previous Orders: <span id="modal_seller_name" style="color:var(--primary);"></span></h3>
-            <div style="overflow-y:auto; max-height:400px; border:1px solid var(--border); border-radius:8px;">
-                <table style="width:100%; border-collapse:collapse;">
-                    <thead style="background:#f9fafb; position:sticky; top:0;">
-                        <tr>
-                            <th style="padding:10px; text-align:left;">Date</th>
-                            <th style="padding:10px; text-align:left;">GRN No</th>
-                            <th style="padding:10px; text-align:left;">Weight</th>
-                            <th style="padding:10px; text-align:left;">Amount</th>
-                            <th style="padding:10px; text-align:right;">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="history_table_body"></tbody>
-                </table>
+    <div id="historyModal" class="global-modal">
+        <div class="g-modal-content" style="max-width: 800px;">
+            <div class="g-modal-header">
+                <h3 style="margin:0; font-size:1.2rem; color:var(--text-main);"><i class="fas fa-history text-primary" style="margin-right:8px;"></i> Previous Orders: <span id="modal_seller_name" style="color:var(--primary);"></span></h3>
+                <span class="g-close-btn" onclick="closeHistoryModal()">&times;</span>
+            </div>
+            <div class="g-modal-body" style="padding:0;">
+                <div class="table-wrap" style="border:none; box-shadow:none; border-radius:0; max-height:400px; margin-bottom:0;">
+                    <table style="width:100%;">
+                        <thead style="background:#f8fafc; position:sticky; top:0;">
+                            <tr>
+                                <th>Date</th>
+                                <th>GRN No</th>
+                                <th>Weight</th>
+                                <th>Amount</th>
+                                <th style="text-align:right;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history_table_body"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -715,7 +440,7 @@ while ($row = $result->fetch_assoc()) {
     <script>
         document.addEventListener('DOMContentLoaded', function() {
 
-            // --- NAYI SCRIPT: Print Stickers Function ---
+            // --- Print Stickers Function ---
             window.printAllStickers = function(grnId) {
                 if (!grnId) return;
                 window.open(`print_engine.php?doc=grn_all_stickers&grn_id=${grnId}`, 'StickerPrint', 'width=400,height=500');
@@ -739,7 +464,6 @@ while ($row = $result->fetch_assoc()) {
                 manualBtn: document.getElementById('manual_entry_btn'),
                 newSellerHint: document.getElementById('new_seller_hint'),
 
-                // History Widgets
                 sellerWidget: document.getElementById('seller_history_widget'),
                 histCount: document.getElementById('hist_count'),
                 histVal: document.getElementById('hist_val'),
@@ -769,7 +493,6 @@ while ($row = $result->fetch_assoc()) {
             };
 
             // --- 1. SELLER LOGIC (DEBOUNCED SEARCH + KEYBOARD) ---
-
             els.sellerName.addEventListener('input', function() {
                 const val = this.value.trim();
                 els.sellerId.value = '';
@@ -818,7 +541,9 @@ while ($row = $result->fetch_assoc()) {
                 els.sellerAddr.value = s.address;
 
                 els.sellerPhone.readOnly = true;
+                els.sellerPhone.style.background = '#f8fafc';
                 els.sellerAddr.readOnly = true;
+                els.sellerAddr.style.background = '#f8fafc';
                 els.newSellerHint.style.display = 'none';
 
                 closeLists();
@@ -840,7 +565,9 @@ while ($row = $result->fetch_assoc()) {
                     .then(data => {
                         if (data.success) {
                             els.histCount.innerText = data.stats.total_count;
-                            els.histVal.innerText = data.stats.total_spent ? parseFloat(data.stats.total_spent).toFixed(2) : '0.00';
+                            els.histVal.innerText = data.stats.total_spent ? parseFloat(data.stats.total_spent).toLocaleString('en-IN', {
+                                minimumFractionDigits: 2
+                            }) : '0.00';
                             els.sellerWidget.style.display = 'block';
 
                             const tbody = document.getElementById('history_table_body');
@@ -849,34 +576,35 @@ while ($row = $result->fetch_assoc()) {
 
                             if (data.history.length > 0) {
                                 data.history.forEach(row => {
-                                    // 🌟 HISTORY ME PRINT BUTTON 🌟
                                     tbody.innerHTML += `
                                         <tr>
-                                            <td style="padding:10px; border-bottom:1px solid #eee;">${row.formatted_date}</td>
-                                            <td style="padding:10px; border-bottom:1px solid #eee;">${row.grn_no}</td>
-                                            <td style="padding:10px; border-bottom:1px solid #eee;">${row.total_weight_kg} Kg</td>
-                                            <td style="padding:10px; border-bottom:1px solid #eee; font-weight:bold;">₹${parseFloat(row.total_value).toFixed(2)}</td>
-                                            <td style="padding:10px; border-bottom:1px solid #eee; text-align:right;">
-                                                <button class="btn-outline" style="padding:4px 8px; font-size:12px; cursor:pointer;" onclick="printAllStickers(${row.id})">
-                                                    <i class="fas fa-tags"></i> Print
+                                            <td style="font-weight:600;">${row.formatted_date}</td>
+                                            <td><strong style="color:var(--primary);">${row.grn_no}</strong></td>
+                                            <td>${row.total_weight_kg} Kg</td>
+                                            <td style="font-weight:700; color:var(--success);">₹${parseFloat(row.total_value).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                                            <td style="text-align:right;">
+                                                <button type="button" class="btn-icon" style="color:var(--info); font-size:1rem;" onclick="printAllStickers(${row.id})" title="Print Stickers">
+                                                    <i class="fas fa-tags"></i>
                                                 </button>
                                             </td>
                                         </tr>`;
                                 });
                             } else {
-                                tbody.innerHTML = '<tr><td colspan="5" style="padding:10px; text-align:center;">No previous history found</td></tr>';
+                                tbody.innerHTML = '<tr><td colspan="5" style="padding:30px; text-align:center; color:var(--text-muted);">No previous history found</td></tr>';
                             }
                         }
                     });
             }
 
-            window.openHistoryModal = () => document.getElementById('historyModal').style.display = 'block';
-            window.closeHistoryModal = () => document.getElementById('historyModal').style.display = 'none';
+            window.openHistoryModal = () => document.getElementById('historyModal').classList.add('active');
+            window.closeHistoryModal = () => document.getElementById('historyModal').classList.remove('active');
 
             window.enableManualSeller = function() {
                 els.sellerId.value = '';
                 els.sellerPhone.readOnly = false;
+                els.sellerPhone.style.background = '#fff';
                 els.sellerAddr.readOnly = false;
+                els.sellerAddr.style.background = '#fff';
                 els.sellerPhone.focus();
                 els.newSellerHint.style.display = 'block';
                 els.sellerWidget.style.display = 'none';
@@ -891,7 +619,6 @@ while ($row = $result->fetch_assoc()) {
             });
 
             // --- 2. SEED LOGIC (LOCAL SEARCH + KEYBOARD) ---
-
             els.seedSearch.addEventListener('input', function() {
                 const val = this.value.toLowerCase();
                 closeLists();
@@ -905,7 +632,7 @@ while ($row = $result->fetch_assoc()) {
                     matches.forEach(s => {
                         const div = document.createElement('div');
                         div.className = 'suggestion-item';
-                        div.innerHTML = `<div><strong>${s.name}</strong></div><div class="suggestion-meta">${s.category} | Last: ₹${s.last_price}</div>`;
+                        div.innerHTML = `<div><strong style="color:var(--text-main);">${s.name}</strong></div><div class="suggestion-meta">${s.category} | Last: ₹${s.last_price}</div>`;
                         div.addEventListener('click', () => selectSeed(s));
                         els.seedList.appendChild(div);
                     });
@@ -960,9 +687,7 @@ while ($row = $result->fetch_assoc()) {
             }
 
             function removeActive(items) {
-                for (let i = 0; i < items.length; i++) {
-                    items[i].classList.remove('active');
-                }
+                for (let i = 0; i < items.length; i++) items[i].classList.remove('active');
             }
 
             function closeLists() {
@@ -976,24 +701,27 @@ while ($row = $result->fetch_assoc()) {
                 if (e.target !== els.sellerName && e.target !== els.seedSearch) closeLists();
                 if (e.target == document.getElementById('historyModal')) closeHistoryModal();
             });
+            // Also close modal on escape key
+            document.addEventListener('keydown', function(e) {
+                if (e.key === "Escape") closeHistoryModal();
+            });
 
             // --- 4. ITEM LOGIC (ADD / CALCULATE / REMOVE) ---
-
             function calculateLine() {
                 const p = parseFloat(els.price.value) || 0;
                 const w = parseFloat(els.weight.value) || 0;
                 const total = (w / 100) * p;
-                els.lineTotal.textContent = total.toFixed(2);
+                els.lineTotal.textContent = total.toLocaleString('en-IN', {
+                    minimumFractionDigits: 2
+                });
             }
 
             els.price.addEventListener('input', calculateLine);
             els.weight.addEventListener('input', calculateLine);
 
             els.addBtn.addEventListener('click', function() {
-                if (!els.seedId.value) {
-                    alert('Please select a seed first');
-                    return;
-                }
+                if (!els.seedId.value) return alert('Please select a seed first');
+
                 const price = parseFloat(els.price.value);
                 const weight = parseFloat(els.weight.value);
 
@@ -1031,7 +759,7 @@ while ($row = $result->fetch_assoc()) {
 
             function renderTable() {
                 if (addedItems.length === 0) {
-                    els.tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#999; padding:20px;">No items added</td></tr>`;
+                    els.tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:30px;">No items added</td></tr>`;
                     els.grandWeight.textContent = '0.00 Kg';
                     els.grandValue.textContent = '₹ 0.00';
                     return;
@@ -1047,13 +775,13 @@ while ($row = $result->fetch_assoc()) {
 
                     const row = `
                         <tr>
-                            <td><strong>${item.seed_name}</strong></td>
-                            <td>${item.bags} Bags (${item.quality})</td>
-                            <td>₹${item.price_per_qtl}</td>
-                            <td>${item.weight_kg} Kg</td>
-                            <td>₹${item.line_value.toFixed(2)}</td>
-                            <td>
-                                <button type="button" class="btn-danger" style="padding:4px 8px;" onclick="removeItem(${idx})"><i class="fas fa-trash"></i></button>
+                            <td><strong style="color:var(--text-main);">${item.seed_name}</strong></td>
+                            <td style="color:var(--text-muted); font-size:0.9rem;">${item.bags} Bags (${item.quality})</td>
+                            <td style="font-weight:600;">₹${item.price_per_qtl}</td>
+                            <td style="font-weight:600;">${item.weight_kg} Kg</td>
+                            <td style="font-weight:700; color:var(--text-main);">₹${item.line_value.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                            <td style="text-align:right;">
+                                <button type="button" class="btn-icon delete" onclick="removeItem(${idx})" title="Remove"><i class="fas fa-trash"></i></button>
                             </td>
                         </tr>
                     `;
@@ -1061,8 +789,9 @@ while ($row = $result->fetch_assoc()) {
                 });
 
                 els.grandWeight.textContent = gW.toFixed(2) + ' Kg';
-                els.grandValue.textContent = '₹ ' + gV.toFixed(2);
-
+                els.grandValue.textContent = '₹ ' + gV.toLocaleString('en-IN', {
+                    minimumFractionDigits: 2
+                });
                 document.getElementById('items_json').value = JSON.stringify(addedItems);
             }
 
@@ -1076,10 +805,10 @@ while ($row = $result->fetch_assoc()) {
             // --- 5. PAYMENT STATUS UPDATE ---
             els.payMode.addEventListener('change', function() {
                 if (this.value === 'Pending' || this.value === 'Credit') {
-                    els.payStatus.className = 'badge badge-warning';
+                    els.payStatus.className = 'badge st-pending';
                     els.payStatus.textContent = 'Unpaid (Credit)';
                 } else {
-                    els.payStatus.className = 'badge badge-success';
+                    els.payStatus.className = 'badge st-completed';
                     els.payStatus.textContent = 'Paid';
                 }
             });
@@ -1088,21 +817,14 @@ while ($row = $result->fetch_assoc()) {
             els.form.addEventListener('submit', function(e) {
                 e.preventDefault();
 
-                if (addedItems.length === 0) {
-                    alert('Please add at least one item to the list.');
-                    return;
-                }
-                if (!els.sellerName.value) {
-                    alert('Please select or enter a seller.');
-                    return;
-                }
-
+                if (addedItems.length === 0) return alert('Please add at least one item to the list.');
+                if (!els.sellerName.value) return alert('Please select or enter a seller.');
                 if (!confirm('Confirm GRN Entry?')) return;
 
                 const btn = els.submitBtn;
                 const oldHtml = btn.innerHTML;
                 btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving Data...';
 
                 const fd = new FormData(this);
 
@@ -1113,9 +835,7 @@ while ($row = $result->fetch_assoc()) {
                     .then(res => res.json())
                     .then(data => {
                         if (data.success) {
-                            // 🌟 AUTO-PRINT POPUP AFTER SAVE 🌟
                             let grnIdForPrint = data.grn_id || data.id;
-
                             if (confirm(`✅ GRN Saved Successfully! #${data.grn_no}\n\n🖨️ Kya aap abhi sabhi items ke Bag Stickers print karna chahte hain?`)) {
                                 printAllStickers(grnIdForPrint);
                             }
