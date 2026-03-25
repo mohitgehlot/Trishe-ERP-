@@ -1,5 +1,6 @@
 <?php
-// packaging.php - Fully Synced with Table, Delete Option & COMBO Logic
+// packaging.php - Fully Synced with Master CSS & Responsive
+ob_start();
 include 'config.php';
 session_start();
 
@@ -107,20 +108,17 @@ if (isset($_POST['action'])) {
             $size_unit = $_POST['n_unit'];
             $container_type = $_POST['n_type'];
 
-            // NAYA LOGIC: Multiplier capture karna
             $multiplier = intval($_POST['n_multiplier'] ?? 1);
             if ($multiplier < 1) $multiplier = 1;
 
             $s_name = $conn->query("SELECT name FROM seeds_master WHERE id=$seed_id")->fetch_assoc()['name'];
 
-            // Naam change karna agar Combo hai
             if ($multiplier > 1) {
                 $final_prod_name = "$s_name Oil - {$multiplier}x$size_val$size_unit Combo $container_type";
             } else {
                 $final_prod_name = "$s_name Oil - $size_val$size_unit $container_type";
             }
 
-            // Weight calculation - Multiplier ke hisaab se total weight
             $base_weight_kg = ($size_unit == 'ml') ? ($size_val / 1000) * 0.910 : (($size_unit == 'L') ? $size_val * 0.910 : $size_val);
             $total_oil_weight_kg = $base_weight_kg * $multiplier;
 
@@ -135,7 +133,6 @@ if (isset($_POST['action'])) {
 
             $new_product_id = $stmt->insert_id;
 
-            // Recipe mein qty_needed me multiplier pass karna
             $stmtRec = $conn->prepare("INSERT INTO product_recipes (raw_material_id, packaging_id, item_type, qty_needed) VALUES (?, ?, 'PACKING', ?)");
             $stmtRec->bind_param("iii", $new_product_id, $pack_mat_id, $multiplier);
             $stmtRec->execute();
@@ -211,7 +208,6 @@ if ($res) while ($r = $res->fetch_assoc()) $products[] = $r;
 $seeds_list = $conn->query("SELECT id, name FROM seeds_master ORDER BY name");
 $pack_list = $conn->query("SELECT id, item_name as name FROM inventory_packaging ORDER BY item_name");
 
-// Fetch Configured Sizes for the Table (Now includes qty_needed)
 $saved_sizes = [];
 $sql_sizes = "
     SELECT 
@@ -237,62 +233,32 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
 <head>
     <meta charset="UTF-8">
     <title>Production & Packaging | Trishe Agro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="css/admin_style.css">
+
     <style>
-        :root {
-            --primary: #4f46e5;
-            --bg-body: #f8fafc;
-            --text-main: #1e293b;
-            --border: #e2e8f0;
-            --success: #10b981;
-            --danger: #ef4444;
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background: var(--bg-body);
-            color: var(--text-main);
-            margin: 0;
-            padding-bottom: 60px;
-            padding-left: 260px;
-        }
-
         .container {
-            margin: 30px auto;
+            max-width: 1400px;
+            margin: 0 auto;
             padding: 20px;
+            overflow-x: hidden;
         }
 
-        .card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        .page-header-box {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
             border: 1px solid var(--border);
-            padding: 25px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
             margin-bottom: 25px;
-        }
-
-        .card-header-title {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: var(--text-main);
-            margin-bottom: 20px;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 10px;
-        }
-
-        .page-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .page-title {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--text-main);
-            margin: 0;
+            flex-wrap: wrap;
+            gap: 15px;
         }
 
         .form-grid {
@@ -302,34 +268,12 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
             margin-bottom: 20px;
         }
 
-        .form-group label {
-            display: block;
-            font-weight: 600;
-            margin-bottom: 8px;
-            font-size: 0.85rem;
-            color: #475569;
-        }
-
-        .form-control {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #cbd5e1;
-            border-radius: 6px;
-            box-sizing: border-box;
-            outline: none;
-            transition: 0.2s;
-        }
-
-        .form-control:focus {
-            border-color: var(--primary);
-        }
-
         /* Requirement Table */
         .req-box {
-            background: #f1f5f9;
-            border: 1px dashed #cbd5e1;
+            background: #f8fafc;
+            border: 1px dashed var(--border);
             border-radius: 8px;
-            padding: 15px;
+            padding: 20px;
             margin-top: 20px;
             display: none;
         }
@@ -338,120 +282,34 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
             width: 100%;
             border-collapse: collapse;
             margin-top: 10px;
-            font-size: 0.9rem;
+            font-size: 0.95rem;
         }
 
         .req-table th {
             text-align: left;
-            color: #475569;
-            padding: 8px;
-            border-bottom: 1px solid #cbd5e1;
+            color: var(--text-muted);
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
         }
 
         .req-table td {
-            padding: 10px 8px;
-            border-bottom: 1px solid #e2e8f0;
-        }
-
-        /* Data Table */
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.9rem;
-        }
-
-        .data-table th {
-            background: #f8fafc;
-            padding: 12px;
-            text-align: left;
-            border-bottom: 2px solid var(--border);
-            color: #475569;
-            font-weight: 600;
-        }
-
-        .data-table td {
-            padding: 12px;
-            border-bottom: 1px dashed var(--border);
-            vertical-align: middle;
+            padding: 12px 10px;
+            border-bottom: 1px solid var(--border);
         }
 
         .status-ok {
             color: var(--success);
-            font-weight: 600;
+            font-weight: 700;
         }
 
         .status-fail {
             color: var(--danger);
-            font-weight: 600;
+            font-weight: 700;
         }
 
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 0.95rem;
-            transition: 0.2s;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            justify-content: center;
-        }
-
-        .btn-primary {
-            background: var(--primary);
-            color: white;
-            width: 100%;
-            margin-top: 20px;
-            padding: 12px;
-        }
-
-        .btn-primary:disabled {
-            background: #9ca3af;
-            cursor: not-allowed;
-        }
-
-        .btn-outline {
-            background: white;
-            color: var(--primary);
-            border: 1px solid var(--primary);
-            width: auto;
-            margin-top: 0;
-        }
-
-        .btn-danger {
-            background: #fee2e2;
-            color: #b91c1c;
-            padding: 6px 12px;
-            font-size: 0.8rem;
-            border-radius: 4px;
-        }
-
-        .btn-danger:hover {
-            background: #fca5a5;
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 2000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal-content {
-            background: white;
-            width: 90%;
-            max-width: 600px;
-            border-radius: 12px;
-            padding: 25px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        /* Fix Table Horizontal Scroll */
+        .table-wrap table {
+            min-width: 100% !important;
         }
 
         @media(max-width: 768px) {
@@ -459,8 +317,24 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
                 padding-left: 0;
             }
 
+            .container {
+                padding: 15px;
+            }
+
+            .page-header-box {
+                flex-direction: column;
+                align-items: stretch;
+                text-align: center;
+            }
+
+            .page-header-box button {
+                width: 100%;
+                justify-content: center;
+            }
+
             .form-grid {
                 grid-template-columns: 1fr;
+                gap: 15px;
             }
         }
     </style>
@@ -473,80 +347,82 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
     <div class="container">
 
         <?php if (isset($_GET['msg']) && $_GET['msg'] == 'deleted'): ?>
-            <div style="background:#dcfce7; color:#166534; padding:12px; border-radius:6px; margin-bottom:20px; font-weight:600; border:1px solid #bbf7d0;">
+            <div class="alert">
                 <i class="fas fa-check-circle"></i> Packaging Size Deleted Successfully!
             </div>
         <?php endif; ?>
 
-        <div class="page-header">
-            <h1 class="page-title"><i class="fas fa-box-open text-primary"></i> Daily Production & Packaging</h1>
+        <div class="page-header-box">
+            <h1 class="page-title"><i class="fas fa-box-open text-primary" style="margin-right:8px;"></i> Daily Production & Packaging</h1>
             <div>
-                <button class="btn btn-outline" onclick="document.getElementById('productModal').style.display='flex'">
+                <button class="btn btn-outline" onclick="openGlobalCreateModal()">
                     <i class="fas fa-plus"></i> Create New Size
                 </button>
             </div>
         </div>
 
         <div class="card">
-            <div class="card-header-title">1. Pack Final Goods</div>
-            <form id="prodForm">
-                <input type="hidden" name="save_production" value="1">
+            <div class="card-header"><i class="fas fa-cubes text-warning" style="margin-right:8px;"></i> 1. Pack Final Goods</div>
+            <div style="padding: 20px;">
+                <form id="prodForm">
+                    <input type="hidden" name="save_production" value="1">
 
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label>Select Product (To Pack)</label>
-                        <select name="product_id" id="product_id" class="form-control" required onchange="checkStock()">
-                            <option value="">-- Choose Product --</option>
-                            <?php foreach ($products as $p): ?>
-                                <option value="<?= $p['id'] ?>">
-                                    <?= htmlspecialchars($p['name']) ?> (<?= floatval($p['weight']) ?> Kg Oil)
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Select Product (To Pack)</label>
+                            <select name="product_id" id="product_id" class="form-input" required onchange="checkStock()">
+                                <option value="">-- Choose Product --</option>
+                                <?php foreach ($products as $p): ?>
+                                    <option value="<?= $p['id'] ?>">
+                                        <?= htmlspecialchars($p['name']) ?> (<?= floatval($p['weight']) ?> Kg Oil)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Quantity to Pack (Packs/Combos)</label>
+                            <input type="number" name="qty" id="qty" class="form-input" placeholder="e.g. 100" required oninput="checkStock()">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Quantity to Pack (Packs/Combos)</label>
-                        <input type="number" name="qty" id="qty" class="form-control" placeholder="e.g. 100" required oninput="checkStock()">
-                    </div>
-                </div>
 
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label>Batch Number</label>
-                        <input type="text" name="batch_no" class="form-control" value="BT-<?= date('mdHi') ?>" required>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Batch Number</label>
+                            <input type="text" name="batch_no" class="form-input" value="BT-<?= date('mdHi') ?>" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Mfg Date</label>
+                            <input type="date" name="mfg_date" class="form-input" value="<?= date('Y-m-d') ?>" required>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Mfg Date</label>
-                        <input type="date" name="mfg_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
+
+                    <div id="reqBox" class="req-box">
+                        <h4 style="margin:0 0 10px 0; color:var(--text-main); font-size:1.1rem;"><i class="fas fa-search text-primary" style="margin-right:8px;"></i> Material Consumption Preview</h4>
+                        <table class="req-table">
+                            <thead>
+                                <tr>
+                                    <th>Item Type</th>
+                                    <th>Required</th>
+                                    <th>Available Stock</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reqBody">
+                            </tbody>
+                        </table>
                     </div>
-                </div>
 
-                <div id="reqBox" class="req-box">
-                    <h4 style="margin:0 0 10px 0; color:#334155;"><i class="fas fa-search"></i> Material Consumption Preview</h4>
-                    <table class="req-table">
-                        <thead>
-                            <tr>
-                                <th>Item Type</th>
-                                <th>Required</th>
-                                <th>Available Stock</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="reqBody">
-                        </tbody>
-                    </table>
-                </div>
-
-                <button type="submit" id="saveBtn" class="btn btn-primary" disabled>
-                    Save Production (Deduct Stock)
-                </button>
-            </form>
+                    <button type="submit" id="saveBtn" class="btn btn-primary" style="width:100%; margin-top:20px; padding:12px;" disabled>
+                        Save Production (Deduct Stock)
+                    </button>
+                </form>
+            </div>
         </div>
 
         <div class="card">
-            <div class="card-header-title">2. Manage Packaging Sizes (Master List)</div>
-            <div style="overflow-x:auto;">
-                <table class="data-table">
+            <div class="card-header"><i class="fas fa-list text-info" style="margin-right:8px;"></i> 2. Manage Packaging Sizes (Master List)</div>
+            <div class="table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+                <table>
                     <thead>
                         <tr>
                             <th>ID</th>
@@ -559,21 +435,21 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
                     <tbody>
                         <?php if (empty($saved_sizes)): ?>
                             <tr>
-                                <td colspan="5" style="text-align:center; color:#94a3b8; padding:20px;">No packaging sizes created yet. Click 'Create New Size' to add one.</td>
+                                <td colspan="5" style="text-align:center; color:var(--text-muted); padding:30px;">No packaging sizes created yet. Click 'Create New Size' to add one.</td>
                             </tr>
                         <?php else: ?>
                             <?php foreach ($saved_sizes as $size): ?>
                                 <tr>
-                                    <td><span style="background:#f1f5f9; padding:4px 8px; border-radius:4px; font-size:0.8rem; color:#64748b;">#<?= $size['prod_id'] ?></span></td>
-                                    <td style="font-weight:600; color:#0f172a;"><?= htmlspecialchars($size['prod_name']) ?></td>
-                                    <td><?= floatval($size['oil_weight']) ?> Kg</td>
+                                    <td><span class="badge bg-gray">#<?= $size['prod_id'] ?></span></td>
+                                    <td style="font-weight:700; color:var(--text-main);"><?= htmlspecialchars($size['prod_name']) ?></td>
+                                    <td style="font-weight:600; color:var(--primary);"><?= floatval($size['oil_weight']) ?> Kg</td>
                                     <td>
-                                        <i class="fas fa-box" style="color:var(--primary); margin-right:5px;"></i>
-                                        <span style="font-weight:bold; color:#059669;"><?= floatval($size['qty_needed']) ?>x</span> <?= htmlspecialchars($size['container_name']) ?>
+                                        <i class="fas fa-box" style="color:var(--text-muted); margin-right:5px;"></i>
+                                        <span style="font-weight:800; color:var(--success);"><?= floatval($size['qty_needed']) ?>x</span> <?= htmlspecialchars($size['container_name']) ?>
                                     </td>
                                     <td style="text-align:right;">
-                                        <a href="?delete_size=<?= $size['prod_id'] ?>" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this packaging configuration?');">
-                                            <i class="fas fa-trash-alt"></i> Delete
+                                        <a href="?delete_size=<?= $size['prod_id'] ?>" class="btn-icon delete" onclick="return confirm('Are you sure you want to delete this packaging configuration?');" title="Delete">
+                                            <i class="fas fa-trash-alt"></i>
                                         </a>
                                     </td>
                                 </tr>
@@ -586,79 +462,34 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
 
     </div>
 
-    <div id="productModal" class="modal">
-        <div class="modal-content">
-            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">
-                <h3 style="margin:0; color:#0f172a;">Define New Packing Size (or Combo)</h3>
-                <span onclick="document.getElementById('productModal').style.display='none'" style="cursor:pointer; font-size:24px; color:#94a3b8;">&times;</span>
-            </div>
-
-            <form id="newProdForm">
-                <input type="hidden" name="action" value="create_new_product">
-
-                <div class="form-group" style="margin-bottom:15px;">
-                    <label>1. Oil Type (Seed)</label>
-                    <select name="n_seed" class="form-control" required>
-                        <option value="">-- Select Oil --</option>
-                        <?php
-                        $seeds_list->data_seek(0);
-                        while ($s = $seeds_list->fetch_assoc()) echo "<option value='{$s['id']}'>{$s['name']} Oil</option>";
-                        ?>
-                    </select>
-                </div>
-
-                <div style="background:#f8fafc; padding:15px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:15px;">
-                    <label style="color:#0f172a; margin-bottom:10px;">2. Single Item Specification</label>
-                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
-                        <div class="form-group" style="margin:0;">
-                            <label>Base Size</label>
-                            <input type="number" name="n_size" class="form-control" placeholder="1" required>
-                        </div>
-                        <div class="form-group" style="margin:0;">
-                            <label>Unit</label>
-                            <select name="n_unit" class="form-control">
-                                <option value="L">Litre</option>
-                                <option value="ml">ml</option>
-                                <option value="Kg">Kg</option>
-                            </select>
-                        </div>
-                        <div class="form-group" style="margin:0;">
-                            <label>Container Type</label>
-                            <select name="n_type" class="form-control">
-                                <option value="Bottle">Bottle</option>
-                                <option value="Jar">Jar</option>
-                                <option value="Pouch">Pouch</option>
-                                <option value="Tin">Tin</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="form-group" style="margin-bottom:20px;">
-                    <label>3. Select Empty Container Material</label>
-                    <select name="n_packing_material" class="form-control" required>
-                        <option value="">-- Select Container --</option>
-                        <?php
-                        $pack_list->data_seek(0);
-                        while ($pm = $pack_list->fetch_assoc()) echo "<option value='{$pm['id']}'>{$pm['name']}</option>";
-                        ?>
-                    </select>
-                </div>
-
-                <div class="form-group" style="margin-bottom:20px; border-left:4px solid var(--primary); padding-left:10px;">
-                    <label style="color:var(--primary);">4. Is this a Combo Pack?</label>
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <input type="number" name="n_multiplier" class="form-control" value="1" min="1" required style="width:100px;">
-                        <span style="color:#64748b; font-size:0.85rem;">Items per pack (Change to 2 for "1+1 Combo")</span>
-                    </div>
-                </div>
-
-                <button type="submit" class="btn btn-primary" style="margin-top:10px; width:100%;">Create & Save Product</button>
-            </form>
-        </div>
-    </div>
+    
 
     <script>
+        // --- MODAL LOGIC (With Keyboard Shortcut) ---
+        const createModal = document.getElementById('productModal');
+
+        function openCreateModal() {
+            createModal.classList.add('active');
+        }
+
+        function closeCreateModal() {
+            createModal.classList.remove('active');
+        }
+
+        window.onclick = function(e) {
+            if (e.target == createModal) closeCreateModal();
+        }
+
+        // Shortcut Key (Alt + C for Create Size)
+        document.addEventListener('keydown', function(e) {
+            if (e.altKey && (e.key === 'c' || e.key === 'C')) {
+                e.preventDefault();
+                openCreateModal();
+            }
+            if (e.key === "Escape") closeCreateModal();
+        });
+
+        // --- STOCK CHECKING ---
         function checkStock() {
             const prodId = document.getElementById('product_id').value;
             const qty = document.getElementById('qty').value;
@@ -673,7 +504,7 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
             }
 
             reqBox.style.display = 'block';
-            reqBody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Checking Stock...</td></tr>';
+            reqBody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin text-primary fa-2x"></i><br>Checking Stock...</td></tr>';
             saveBtn.disabled = true;
 
             const fd = new FormData();
@@ -690,9 +521,9 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
                     if (res.success) {
                         let html = `
                         <tr style="background:#fff7ed;">
-                            <td><strong>Raw Loose Oil</strong></td>
-                            <td>${res.oil.needed.toFixed(3)} Kg</td>
-                            <td>${parseFloat(res.oil.stock).toFixed(3)} Kg</td>
+                            <td style="color:var(--warning); font-weight:700;"><i class="fas fa-tint"></i> Raw Loose Oil</td>
+                            <td style="font-weight:600;">${res.oil.needed.toFixed(3)} Kg</td>
+                            <td style="font-weight:600;">${parseFloat(res.oil.stock).toFixed(3)} Kg</td>
                             <td class="${res.oil.status ? 'status-ok' : 'status-fail'}">${res.oil.status ? '✅ OK' : '❌ SHORT'}</td>
                         </tr>`;
 
@@ -700,15 +531,15 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
                             res.packaging.forEach(item => {
                                 html += `
                                 <tr>
-                                    <td><i class="fas fa-box" style="color:#94a3b8;"></i> ${item.name}</td>
-                                    <td>${item.needed} ${item.unit}</td>
-                                    <td>${parseFloat(item.stock).toFixed(0)}</td>
+                                    <td style="color:var(--text-main); font-weight:600;"><i class="fas fa-box" style="color:#94a3b8; margin-right:8px;"></i> ${item.name}</td>
+                                    <td style="font-weight:600;">${item.needed} ${item.unit}</td>
+                                    <td style="font-weight:600;">${parseFloat(item.stock).toFixed(0)}</td>
                                     <td class="${item.status ? 'status-ok' : 'status-fail'}">${item.status ? '✅ OK' : '❌ SHORT'}</td>
                                 </tr>`;
                             });
                         } else {
                             if (res.no_recipe) {
-                                html += `<tr><td colspan="4" style="color:#d97706; background:#fef3c7; padding:15px; border-radius:6px;"><b>⚠️ No Container Linked!</b> Delete this product below and recreate it, or link a container from the BOM page.</td></tr>`;
+                                html += `<tr><td colspan="4" style="color:var(--warning); background:#fffbeb; padding:15px; border-radius:6px; text-align:center;"><b>⚠️ No Container Linked!</b> Delete this product below and recreate it, or link a container from the BOM page.</td></tr>`;
                             }
                         }
 
@@ -722,14 +553,19 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
                             saveBtn.innerHTML = "<i class='fas fa-exclamation-triangle'></i> Insufficient Material";
                         }
                     } else {
-                        reqBody.innerHTML = `<tr><td colspan="4" style="color:red;">Error: ${res.error}</td></tr>`;
+                        reqBody.innerHTML = `<tr><td colspan="4" style="color:var(--danger); text-align:center; padding:20px;">Error: ${res.error}</td></tr>`;
                     }
                 });
         }
 
+        // --- SUBMIT PRODUCTION ---
         document.getElementById('prodForm').addEventListener('submit', function(e) {
             e.preventDefault();
             if (!confirm("Confirm production? Raw Oil and Empty Containers will be deducted immediately.")) return;
+
+            const btn = document.getElementById('saveBtn');
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            btn.disabled = true;
 
             fetch('packaging.php', {
                     method: 'POST',
@@ -742,12 +578,23 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
                         window.location.reload();
                     } else {
                         alert("Error: " + res.error);
+                        btn.innerHTML = "<i class='fas fa-check-circle'></i> Confirm & Save Production";
+                        btn.disabled = false;
                     }
+                }).catch(err => {
+                    alert("Network Error");
+                    btn.disabled = false;
                 });
         });
 
+        // --- CREATE NEW PRODUCT / COMBO ---
         document.getElementById('newProdForm').addEventListener('submit', function(e) {
             e.preventDefault();
+            const btn = this.querySelector('button[type="submit"]');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+            btn.disabled = true;
+
             fetch('packaging.php', {
                     method: 'POST',
                     body: new FormData(this)
@@ -755,11 +602,15 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
                 .then(r => r.json())
                 .then(res => {
                     if (res.success) {
-                        alert("Product created successfully!");
-                        location.reload();
+                        window.location.reload();
                     } else {
                         alert("Error: " + res.error);
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
                     }
+                }).catch(err => {
+                    alert("Network Error");
+                    btn.disabled = false;
                 });
         });
     </script>

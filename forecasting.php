@@ -1,4 +1,5 @@
 <?php
+// forecasting.php - INTEGRATED WITH MASTER CSS
 include 'config.php';
 session_start();
 
@@ -78,7 +79,7 @@ if (isset($_GET['delete_ing'])) {
 // --- FETCH LISTS FOR UI (SORTED ALPHABETICALLY) ---
 $finished_goods = $conn->query("SELECT id, name FROM products WHERE is_active=1 ORDER BY name ASC");
 
-// 🔥 FIXED: Sorted Cakes & Oils Alphabetically
+// Sorted Cakes & Oils Alphabetically
 $active_cakes = [];
 $cakes_q = $conn->query("SELECT DISTINCT rmi.seed_id, sm.name FROM raw_material_inventory rmi JOIN seeds_master sm ON rmi.seed_id = sm.id WHERE rmi.product_type = 'CAKE' ORDER BY sm.name ASC");
 if($cakes_q) while($r = $cakes_q->fetch_assoc()) $active_cakes[] = $r;
@@ -153,81 +154,73 @@ if($selected_product_id > 0) {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Production Recipe Builder</title>
+    <title>Production Recipe Builder | Trishe Agro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
+    <link rel="stylesheet" href="css/admin_style.css">
+    
     <style>
-        :root { --primary: #2563eb; --bg: #f8fafc; --text: #1e293b; --border: #e2e8f0; --success: #10b981; --danger: #ef4444; }
-       .container {     margin-left: 30px;
-  padding: 10px; }
-        .header-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 25px; color: #0f172a; border-bottom: 2px solid var(--border); padding-bottom: 10px;}
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; overflow-x: hidden; }
+
+        .page-header-box { background: #fff; padding: 20px; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
+        .page-title { font-size: 1.5rem; font-weight: 700; color: var(--text-main); margin: 0; }
+
+        .grid-box { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
         
-        .grid-box { display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; align-items: start; }
-        
-        .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid var(--border); overflow: hidden; margin-bottom: 20px;}
-        .card-header { background: #f1f5f9; padding: 15px 20px; font-weight: 700; border-bottom: 1px solid var(--border); color: #334155;}
-        .card-body { padding: 20px; }
-        
-        .form-group { margin-bottom: 15px; }
-        label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #475569; }
-        input, select { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.95rem; outline: none; box-sizing: border-box;}
-        input:focus, select:focus { border-color: var(--primary); }
-        
-        /* Select2 Custom Styling to match your theme */
+        .add-boxes { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px dashed var(--border); margin-bottom: 20px;}
+
+        /* Select2 Custom Styling to match Master CSS */
         .select2-container .select2-selection--single {
-            height: 42px !important;
-            border: 1px solid #cbd5e1 !important;
+            height: 40px !important;
+            border: 1px solid var(--border) !important;
             border-radius: 6px !important;
             padding: 5px 0px;
         }
         .select2-container--default .select2-selection--single .select2-selection__arrow {
-            height: 40px !important;
+            height: 38px !important;
         }
-        
-        .btn { padding: 10px 16px; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; display:inline-block; text-align:center;}
-        .btn-green { background: #10b981; width:100%; padding: 12px; font-size: 1.05rem; margin-top: 10px;}
-        .btn-blue { background: #3b82f6; }
-        .btn-sm { padding: 6px 10px; font-size: 0.8rem; }
-        .btn-danger { background: #fee2e2; color: #b91c1c; }
-        .btn-warning { background: #fef3c7; color: #b45309; }
-        
-        .type-badge { padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; }
-        .badge-cake { background: #fef08a; color: #92400e; }
-        .badge-oil { background: #fed7aa; color: #9a3412; }
-        .badge-pack { background: #e0e7ff; color: #3730a3; }
-        
-        .data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-        .data-table th { text-align: left; padding: 12px; border-bottom: 2px solid var(--border); background: #f8fafc; color: #475569;}
-        .data-table td { padding: 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-        
-        .add-boxes { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px dashed #cbd5e1; margin-bottom: 20px;}
 
-        /* Modal Styles */
-        .modal { display:none; position:fixed; z-index:2000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); align-items:center; justify-content:center; }
-        .modal-content { background:white; width:90%; max-width:400px; border-radius:10px; padding:20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);}
+        .type-badge { padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
+        .badge-cake { background: #fef08a; color: #92400e; border: 1px solid #fde047; }
+        .badge-oil { background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
+        .badge-pack { background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; }
 
-        @media(max-width: 1024px) { .container {margin-left: 0px;} .grid-box, .add-boxes { grid-template-columns: 1fr; } }
-        @media(max-width: 762px) { .container {margin-left: 0px;} }
+        /* Fix Table Horizontal Scroll */
+        .table-wrap table { min-width: 100% !important; }
+
+        @media(max-width: 1024px) { 
+            .grid-box { grid-template-columns: 1fr; } 
+        }
+        @media(max-width: 768px) { 
+            body { padding-left: 0; }
+            .container { padding: 15px; }
+            .page-header-box { text-align: center; }
+            .add-boxes { grid-template-columns: 1fr; } 
+        }
     </style>
 </head>
 <body>
 
     <?php include 'admin_header.php'; ?>
+
 <div class="container">
-    <div class="header-title"><i class="fas fa-boxes text-primary"></i> Product Recipe & Bill of Materials (BOM)</div>
+    <div class="page-header-box">
+        <h1 class="page-title"><i class="fas fa-boxes text-primary" style="margin-right:10px;"></i> Product Recipe & Bill of Materials (BOM)</h1>
+    </div>
 
     <div class="grid-box">
         
         <div>
             <div class="card">
-                <div class="card-header">1. Select Master Product</div>
-                <div class="card-body">
+                <div class="card-header"><i class="fas fa-search text-info" style="margin-right:8px;"></i> 1. Select Master Product</div>
+                <div style="padding:20px;">
                     <form method="GET" id="productForm">
                         <div class="form-group" style="margin:0;">
-                            <label>Product you want to make (e.g., Cattle Feed 50Kg, Mustard Oil 1L)</label>
+                            <label class="form-label">Product you want to make (e.g., Cattle Feed 50Kg, Mustard Oil 1L)</label>
                             <select name="selected_product" class="searchable-select" onchange="document.getElementById('productForm').submit()">
                                 <option value="">-- Search & Select Product --</option>
                                 <?php 
@@ -244,61 +237,66 @@ if($selected_product_id > 0) {
             </div>
 
             <?php if($selected_product_id): ?>
-            <form method="POST" id="unifiedAddForm" onsubmit="return validateAddForm()">
-                <input type="hidden" name="product_id" value="<?= $selected_product_id ?>">
-                <input type="hidden" name="add_to_recipe" value="1">
-                
-                <div class="add-boxes">
-                    <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-                        <h4 style="margin: 0 0 15px 0; color: #92400e;"><i class="fas fa-seedling"></i> Add Raw Material</h4>
-                        <div class="form-group">
-                            <label>Search Cake or Raw Oil</label>
-                            <select name="raw_material_val" id="rm_val" class="searchable-select">
-                                <option value="">-- None --</option>
-                                <optgroup label="🧱 CAKES (From Inventory)">
-                                    <?php foreach($active_cakes as $sm) echo "<option value='CAKE_{$sm['seed_id']}'>{$sm['name']} Cake</option>"; ?>
-                                </optgroup>
-                                <optgroup label="🛢️ RAW OILS (From Tank)">
-                                    <?php foreach($active_oils as $sm) echo "<option value='OIL_{$sm['seed_id']}'>{$sm['name']} Raw Oil</option>"; ?>
-                                </optgroup>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Quantity (Kg)</label>
-                            <input type="number" step="0.001" name="rm_qty" id="rm_qty" placeholder="e.g. 50">
-                        </div>
-                    </div>
+            <div class="card" style="padding-bottom: 20px;">
+                <div class="card-header"><i class="fas fa-plus-circle text-primary" style="margin-right:8px;"></i> 2. Build Recipe Formula</div>
+                <div style="padding:20px 20px 0 20px;">
+                    <form method="POST" id="unifiedAddForm" onsubmit="return validateAddForm()">
+                        <input type="hidden" name="product_id" value="<?= $selected_product_id ?>">
+                        <input type="hidden" name="add_to_recipe" value="1">
+                        
+                        <div class="add-boxes">
+                            <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+                                <h4 style="margin: 0 0 15px 0; color: var(--warning);"><i class="fas fa-seedling"></i> Add Raw Material</h4>
+                                <div class="form-group">
+                                    <label class="form-label">Search Cake or Raw Oil</label>
+                                    <select name="raw_material_val" id="rm_val" class="searchable-select">
+                                        <option value="">-- None --</option>
+                                        <optgroup label="🧱 CAKES (From Inventory)">
+                                            <?php foreach($active_cakes as $sm) echo "<option value='CAKE_{$sm['seed_id']}'>{$sm['name']} Cake</option>"; ?>
+                                        </optgroup>
+                                        <optgroup label="🛢️ RAW OILS (From Tank)">
+                                            <?php foreach($active_oils as $sm) echo "<option value='OIL_{$sm['seed_id']}'>{$sm['name']} Raw Oil</option>"; ?>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin:0;">
+                                    <label class="form-label">Quantity (Kg)</label>
+                                    <input type="number" step="0.001" name="rm_qty" id="rm_qty" class="form-input" placeholder="e.g. 50">
+                                </div>
+                            </div>
 
-                    <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-                        <h4 style="margin: 0 0 15px 0; color: #3730a3;"><i class="fas fa-box"></i> Add Packing Material</h4>
-                        <div class="form-group">
-                            <label>Search Bag, Bottle, Tin, etc.</label>
-                            <select name="packing_id" id="pack_val" class="searchable-select">
-                                <option value="">-- None --</option>
-                                <?php foreach($packing_items as $pm) echo "<option value='{$pm['id']}'>{$pm['item_name']}</option>"; ?>
-                            </select>
+                            <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+                                <h4 style="margin: 0 0 15px 0; color: var(--primary);"><i class="fas fa-box"></i> Add Packing Material</h4>
+                                <div class="form-group">
+                                    <label class="form-label">Search Bag, Bottle, Tin, etc.</label>
+                                    <select name="packing_id" id="pack_val" class="searchable-select">
+                                        <option value="">-- None --</option>
+                                        <?php foreach($packing_items as $pm) echo "<option value='{$pm['id']}'>{$pm['item_name']}</option>"; ?>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin:0;">
+                                    <label class="form-label">Quantity (Pcs)</label>
+                                    <input type="number" step="0.001" name="pack_qty" id="pack_qty" class="form-input" placeholder="e.g. 1">
+                                </div>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label>Quantity (Pcs)</label>
-                            <input type="number" step="0.001" name="pack_qty" id="pack_qty" placeholder="e.g. 1">
-                        </div>
-                    </div>
+                        <button type="submit" class="btn btn-primary" style="width:100%; padding:12px; font-size:1.05rem; background:var(--success); border-color:var(--success);"><i class="fas fa-check-circle" style="margin-right:5px;"></i> Save to Recipe Formula</button>
+                    </form>
                 </div>
-                <button type="submit" class="btn btn-green"><i class="fas fa-plus-circle"></i> Add to Recipe Formula</button>
-            </form>
+            </div>
 
-            <div class="card" style="margin-top: 25px;">
-                <div class="card-header">Current Recipe Formula (For 1 Unit)</div>
-                <div class="card-body" style="padding:0;">
+            <div class="card">
+                <div class="card-header"><i class="fas fa-list-alt text-muted" style="margin-right:8px;"></i> Current Recipe Formula (For 1 Unit)</div>
+                <div class="table-wrap" style="border:none; border-radius:0; box-shadow:none;">
                     <?php if(empty($forecast_data)): ?>
-                        <div style="text-align: center; padding: 30px; color: #94a3b8;">No items added to recipe yet.</div>
+                        <div style="text-align: center; padding: 40px; color: var(--text-muted); border-bottom:1px solid var(--border);">No items added to recipe yet.</div>
                     <?php else: ?>
-                        <table class="data-table">
+                        <table>
                             <thead>
                                 <tr>
                                     <th>Type</th>
                                     <th>Material Name</th>
-                                    <th>Quantity Needed</th>
+                                    <th>Qty Needed</th>
                                     <th style="text-align:right;">Actions</th>
                                 </tr>
                             </thead>
@@ -310,18 +308,18 @@ if($selected_product_id > 0) {
                                 ?>
                                     <tr>
                                         <td><span class="type-badge <?= $badge_class ?>"><?= $item['item_type'] ?></span></td>
-                                        <td style="font-weight:600; color:#1e293b;"><?= htmlspecialchars($item['raw_name']) ?></td>
+                                        <td style="font-weight:600; color:var(--text-main);"><?= htmlspecialchars($item['raw_name']) ?></td>
                                         <td>
-                                            <span style="font-weight:700; color:#2563eb; background:#eff6ff; padding:4px 10px; border-radius:20px;">
+                                            <span style="font-weight:700; color:var(--primary); background:#eff6ff; padding:4px 10px; border-radius:20px;">
                                                 <?= $item['qty_needed'] ?> <?= $item['raw_unit'] ?? '' ?>
                                             </span>
                                         </td>
-                                        <td style="text-align:right; gap:5px; display:flex; justify-content:flex-end;">
-                                            <button type="button" class="btn btn-sm btn-warning" onclick="openEditModal(<?= $item['recipe_id'] ?>, '<?= htmlspecialchars($item['raw_name']) ?>', <?= $item['qty_needed'] ?>)">
-                                                <i class="fas fa-edit"></i> Edit
+                                        <td style="text-align:right; white-space:nowrap;">
+                                            <button type="button" class="btn-icon" style="color:var(--warning); margin-right:5px;" onclick="openEditModal(<?= $item['recipe_id'] ?>, '<?= htmlspecialchars($item['raw_name']) ?>', <?= $item['qty_needed'] ?>)" title="Edit">
+                                                <i class="fas fa-edit"></i>
                                             </button>
-                                            <a href="?delete_ing=<?= $item['recipe_id'] ?>&pid=<?= $selected_product_id ?>" class="btn btn-sm btn-danger" onclick="return confirm('Remove this item from recipe?');">
-                                                <i class="fas fa-trash-alt"></i> Delete
+                                            <a href="?delete_ing=<?= $item['recipe_id'] ?>&pid=<?= $selected_product_id ?>" class="btn-icon delete" onclick="return confirm('Remove this item from recipe?');" title="Delete">
+                                                <i class="fas fa-trash-alt"></i>
                                             </a>
                                         </td>
                                     </tr>
@@ -334,97 +332,109 @@ if($selected_product_id > 0) {
             <?php endif; ?>
         </div>
 
-        <div class="card">
-            <div class="card-header">Stock Predictor & Requirements</div>
-            <div class="card-body">
-                <?php if($selected_product_id): ?>
-                    <form method="GET" style="background:#f8fafc; padding:15px; border-radius:8px; margin-bottom:20px; display:flex; gap:10px; align-items:flex-end; border:1px solid #e2e8f0;">
-                        <input type="hidden" name="selected_product" value="<?= $selected_product_id ?>">
-                        <div style="flex:1;">
-                            <label style="color:#0f172a;">How many units do you want to produce?</label>
-                            <input type="number" name="target_qty" value="<?= $target_qty ?>" style="font-size:1.2rem; font-weight:bold; color:var(--primary);" onchange="this.form.submit()">
-                        </div>
-                        <button type="submit" class="btn btn-blue" style="width:auto;">Predict</button>
-                    </form>
+        <div>
+            <div class="card">
+                <div class="card-header"><i class="fas fa-chart-bar text-warning" style="margin-right:8px;"></i> Stock Predictor & Requirements</div>
+                <div style="padding: 20px;">
+                    <?php if($selected_product_id): ?>
+                        <form method="GET" style="background:#f8fafc; padding:20px; border-radius:8px; margin-bottom:20px; display:flex; gap:15px; align-items:flex-end; border:1px solid var(--border); flex-wrap:wrap;">
+                            <input type="hidden" name="selected_product" value="<?= $selected_product_id ?>">
+                            <div style="flex:1; min-width:200px;">
+                                <label class="form-label" style="color:var(--text-main);">How many units do you want to produce?</label>
+                                <input type="number" name="target_qty" class="form-input" value="<?= $target_qty ?>" style="font-size:1.2rem; font-weight:700; color:var(--primary);" onchange="this.form.submit()">
+                            </div>
+                            <button type="submit" class="btn btn-primary" style="width:auto; padding:12px 20px;"><i class="fas fa-bolt"></i> Predict</button>
+                        </form>
 
-                    <?php if(!empty($forecast_data)): ?>
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Material Required</th>
-                                    <th>Needed</th>
-                                    <th>In Stock</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php 
-                                $has_shortage = false;
-                                foreach($forecast_data as $row): 
-                                    if($row['shortage'] > 0) $has_shortage = true;
-                                ?>
-                                <tr>
-                                    <td style="font-weight:600;"><?= htmlspecialchars($row['raw_name']) ?></td>
-                                    <td>
-                                        <b style="color:#0f172a;"><?= number_format($row['total_needed'], 2) ?></b>
-                                        <small><?= htmlspecialchars($row['raw_unit'] ?? '') ?></small>
-                                    </td>
-                                    <td>
-                                        <?php if($row['shortage'] > 0): ?>
-                                            <span style="color:var(--danger); font-weight:bold;"><?= number_format($row['current_stock'], 2) ?> (Need <?= number_format($row['shortage'], 2) ?>)</span>
-                                        <?php else: ?>
-                                            <span style="color:var(--success); font-weight:bold;"><?= number_format($row['current_stock'], 2) ?> (OK)</span>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                        
-                        <?php if($has_shortage): ?>
-                            <div style="margin-top:20px; padding:15px; background:#fef2f2; border-left:4px solid #ef4444; border-radius:4px; color:#991b1b;">
-                                <strong>⚠️ Shortage Detected!</strong> You don't have enough materials in stock.
+                        <?php if(!empty($forecast_data)): ?>
+                            <div class="table-wrap" style="border:none; box-shadow:none;">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Material Required</th>
+                                            <th>Needed</th>
+                                            <th>In Stock</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php 
+                                        $has_shortage = false;
+                                        foreach($forecast_data as $row): 
+                                            if($row['shortage'] > 0) $has_shortage = true;
+                                        ?>
+                                        <tr>
+                                            <td style="font-weight:600; color:var(--text-main);"><?= htmlspecialchars($row['raw_name']) ?></td>
+                                            <td>
+                                                <b style="color:var(--text-main); font-size:1.05rem;"><?= number_format($row['total_needed'], 2) ?></b>
+                                                <small style="color:var(--text-muted);"><?= htmlspecialchars($row['raw_unit'] ?? '') ?></small>
+                                            </td>
+                                            <td>
+                                                <?php if($row['shortage'] > 0): ?>
+                                                    <span style="color:var(--danger); font-weight:700; font-size:1.05rem;"><?= number_format($row['current_stock'], 2) ?></span>
+                                                    <small style="color:var(--danger); display:block;">(Need <?= number_format($row['shortage'], 2) ?>)</small>
+                                                <?php else: ?>
+                                                    <span style="color:var(--success); font-weight:700; font-size:1.05rem;"><?= number_format($row['current_stock'], 2) ?></span>
+                                                    <span class="badge" style="background:#dcfce7; color:#166534; margin-left:5px;">OK</span>
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
                             </div>
-                        <?php else: ?>
-                            <div style="margin-top:20px; padding:15px; background:#f0fdf4; border-left:4px solid #10b981; border-radius:4px; color:#166534;">
-                                <strong>✅ Ready for Production!</strong> All materials are available.
-                            </div>
+                            
+                            <?php if($has_shortage): ?>
+                                <div class="alert" style="margin-top:20px; margin-bottom:0; background:#fef2f2; border-color:#fca5a5; color:#991b1b; display:flex; align-items:center; gap:10px;">
+                                    <i class="fas fa-exclamation-circle fa-2x"></i>
+                                    <div><strong>Shortage Detected!</strong> You don't have enough materials in stock to produce <?= $target_qty ?> units.</div>
+                                </div>
+                            <?php else: ?>
+                                <div class="alert" style="margin-top:20px; margin-bottom:0; background:#f0fdf4; border-color:#bbf7d0; color:#166534; display:flex; align-items:center; gap:10px;">
+                                    <i class="fas fa-check-circle fa-2x"></i>
+                                    <div><strong>Ready for Production!</strong> All materials are available in stock.</div>
+                                </div>
+                            <?php endif; ?>
                         <?php endif; ?>
+                    <?php else: ?>
+                        <div style="text-align:center; padding: 60px 20px; color: var(--text-muted); border:2px dashed var(--border); border-radius:8px;">
+                            <i class="fas fa-arrow-left fa-3x" style="margin-bottom:15px; opacity:0.3;"></i><br>
+                            <span style="font-weight:500;">Please select a product from the left panel first to view its stock requirements.</span>
+                        </div>
                     <?php endif; ?>
-                <?php else: ?>
-                    <div style="text-align:center; padding: 40px 20px; color: #94a3b8;">
-                        Please select a product first to view its stock requirements.
-                    </div>
-                <?php endif; ?>
+                </div>
             </div>
         </div>
 
     </div>
+</div>
 
-    <div id="editModal" class="modal">
-        <div class="modal-content">
-            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e2e8f0; padding-bottom:10px; margin-bottom:20px;">
-                <h3 style="margin:0; color:#0f172a;">Edit Ingredient Quantity</h3>
-                <span onclick="document.getElementById('editModal').style.display='none'" style="cursor:pointer; font-size:24px; color:#94a3b8;">&times;</span>
-            </div>
+<div id="editModal" class="global-modal">
+    <div class="g-modal-content" style="max-width:400px;">
+        <div class="g-modal-header">
+            <h3 style="margin:0; font-size:1.1rem; color:var(--text-main);"><i class="fas fa-edit text-warning" style="margin-right:8px;"></i> Edit Ingredient Quantity</h3>
+            <span class="g-close-btn" onclick="document.getElementById('editModal').classList.remove('active')">&times;</span>
+        </div>
+        <div class="g-modal-body">
             <form method="POST">
                 <input type="hidden" name="update_qty" value="1">
                 <input type="hidden" name="product_id" value="<?= $selected_product_id ?>">
                 <input type="hidden" name="recipe_id" id="edit_recipe_id">
                 
-                <div class="form-group">
-                    <label>Material Name</label>
-                    <input type="text" id="edit_mat_name" class="form-control" readonly style="background:#f1f5f9; color:#64748b;">
+                <div class="form-group" style="margin-bottom:15px;">
+                    <label class="form-label">Material Name</label>
+                    <input type="text" id="edit_mat_name" class="form-input" readonly style="background:#f1f5f9; color:#64748b; font-weight:600; cursor:not-allowed;">
                 </div>
-                <div class="form-group">
-                    <label>New Quantity Needed (For 1 Unit)</label>
-                    <input type="number" step="0.001" name="new_qty" id="edit_qty_val" class="form-control" required>
+                <div class="form-group" style="margin-bottom:20px;">
+                    <label class="form-label">New Quantity Needed (For 1 Unit)</label>
+                    <input type="number" step="0.001" name="new_qty" id="edit_qty_val" class="form-input" required>
                 </div>
                 
-                <button type="submit" class="btn btn-blue" style="width:100%; margin-top:10px;"><i class="fas fa-save"></i> Save Changes</button>
+                <button type="submit" class="btn btn-primary" style="width:100%; padding:12px;"><i class="fas fa-save" style="margin-right:5px;"></i> Save Changes</button>
             </form>
         </div>
     </div>
 </div>
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
@@ -459,7 +469,15 @@ if($selected_product_id > 0) {
             document.getElementById('edit_recipe_id').value = recipeId;
             document.getElementById('edit_mat_name').value = matName;
             document.getElementById('edit_qty_val').value = currentQty;
-            document.getElementById('editModal').style.display = 'flex';
+            document.getElementById('editModal').classList.add('active');
+        }
+        
+        // Close modal on click outside
+        window.onclick = function(e) {
+            const editModal = document.getElementById('editModal');
+            if (e.target == editModal) {
+                editModal.classList.remove('active');
+            }
         }
     </script>
 </body>

@@ -109,81 +109,12 @@ if (isset($_POST['action']) && $_POST['action'] == 'add_packaging') {
     }
     exit;
 }
-// ================= NEW LOGIC END =================
-// F. ADD PACKAGING ITEM & EXPENSE ENTRY (UPDATED)
-if (isset($_POST['action']) && $_POST['action'] == 'add_packaging') {
-    ob_clean();
-    header('Content-Type: application/json');
 
-    $name = trim($_POST['p_name']);
-    $cat = $_POST['p_category'];
-    $qty = floatval($_POST['p_qty']);
-    $alert = intval($_POST['p_alert']);
-    $unit = $_POST['p_unit'];
-
-    // New Fields for Expense
-    $cost = floatval($_POST['p_cost']); // Total Amount
-    $pay_mode = $_POST['p_payment_mode']; // Cash/Online
-
-    if (empty($name)) {
-        echo json_encode(['success' => false, 'error' => 'Item Name is required']);
-        exit;
-    }
-
-    try {
-        $conn->begin_transaction(); // Transaction start taaki dono tables me data ek sath jaye
-
-        // 1. UPDATE INVENTORY (Stock Badhana)
-        $check = $conn->query("SELECT id, quantity FROM inventory_packaging WHERE item_name = '$name'");
-
-        if ($check->num_rows > 0) {
-            // Agar item pehle se hai -> Update Quantity
-            $row = $check->fetch_assoc();
-            $new_qty = $row['quantity'] + $qty;
-            $conn->query("UPDATE inventory_packaging SET quantity = $new_qty, updated_at = NOW() WHERE id = {$row['id']}");
-        } else {
-            // Agar naya item hai -> Insert New
-            $stmt = $conn->prepare("INSERT INTO inventory_packaging (item_name, category, quantity, unit, alert_level) VALUES (?, ?, ?, ?, ?)");
-            $stmt->bind_param("ssdsi", $name, $cat, $qty, $unit, $alert);
-            $stmt->execute();
-        }
-
-        // 2. ADD EXPENSE ENTRY (Agar Cost daali hai to)
-        if ($cost > 0) {
-            $date = date('Y-m-d'); // Aaj ki date
-            $category = 'Packaging Purchase'; // Fixed Category
-            $desc = "Purchase of $qty $unit - $name"; // Description auto-generate
-            $status = 'Paid'; // Maan ke chal rahe hain payment ho gayi
-            $admin_id = $_SESSION['admin_id']; // Authorized By
-
-            // Aapki table structure ke hisaab se Query
-            $stmtExp = $conn->prepare("INSERT INTO factory_expenses 
-                (date, category, amount, description, payment_mode, status, authorized_by, created_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, NOW())");
-
-            // Bind: s=string, s=string, d=double, s=string, s=string, s=string, i=int
-            $stmtExp->bind_param("ssdsssi", $date, $category, $cost, $desc, $pay_mode, $status, $admin_id);
-
-            if (!$stmtExp->execute()) {
-                throw new Exception("Expense Insert Failed: " . $stmtExp->error);
-            }
-        }
-
-        $conn->commit(); // Sab sahi hai to save karo
-        echo json_encode(['success' => true, 'message' => 'Stock & Expense Added Successfully!']);
-    } catch (Exception $e) {
-        $conn->rollback(); // Error aaya to wapas piche jao
-        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
-    }
-    exit;
-}
 if (isset($_POST['action']) && $_POST['action'] == 'get_seed_ledger') {
-
     ob_clean();
     header('Content-Type: application/json');
 
     $seed_id = (int)$_POST['seed_id'];
-
 
     $sql = "SELECT transaction_date, transaction_type, batch_no, quantity, notes 
             FROM inventory 
@@ -206,11 +137,11 @@ if (isset($_POST['action']) && $_POST['action'] == 'get_seed_ledger') {
 
         echo json_encode(['success' => true, 'data' => $data]);
     } catch (Exception $e) {
-        // Error ko JSON format me bhejein
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
     exit;
 }
+
 // HANDLE AJAX: LOOSE STOCK LEDGER
 if (isset($_POST['action']) && $_POST['action'] == 'get_loose_ledger') {
     ob_clean();
@@ -239,6 +170,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'get_loose_ledger') {
     echo json_encode(['success' => true, 'data' => $data]);
     exit;
 }
+
 // 1. RAW MATERIAL (SEEDS)
 $seeds_stock = [];
 $sql_seeds = "SELECT sm.id,sm.name, sm.category, sm.current_stock FROM seeds_master sm ORDER BY sm.name";
@@ -271,14 +203,13 @@ $sql_loose = "
 $res_loose = $conn->query($sql_loose);
 if ($res_loose) {
     while ($row = $res_loose->fetch_assoc()) {
-        // Formatting name for display (e.g., "Mustard - OIL")
         $row['display_name'] = $row['seed_name'] . ' - ' . $row['product_type'];
         $row['storage_location'] = ($row['product_type'] == 'OIL') ? 'Oil Tank' : 'Cake Heap/Silo';
         $loose_stock[] = $row;
     }
 }
 
-// 3. PACKING MATERIAL - Example Logic
+// 3. PACKING MATERIAL
 $packing_stock = [];
 try {
     $sql_pack = "SELECT item_name, category, quantity, unit, alert_level FROM inventory_packaging ORDER BY item_name";
@@ -291,7 +222,7 @@ try {
 } catch (Exception $e) {
 }
 
-// 4. FINISHED GOODS - Example Logic
+// 4. FINISHED GOODS
 $finished_stock = [];
 try {
     $sql_prod = "SELECT p.name as product_name, ip.batch_no, ip.qty, ip.unit, ip.mfg_date 
@@ -307,7 +238,7 @@ try {
 } catch (Exception $e) {
 }
 
-// 5. RECENT GRN LIST (For Bottom Section)
+// 5. RECENT GRN LIST
 $grn_list = [];
 $sql_grn = "SELECT ig.*, s.name as seller_name FROM inventory_grn ig LEFT JOIN sellers s ON ig.seller_id = s.id ORDER BY ig.created_at DESC LIMIT 10";
 $res_grn = $conn->query($sql_grn);
@@ -337,86 +268,19 @@ function formatDate($date)
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
+    <link rel="stylesheet" href="css/admin_style.css">
+
     <style>
-        /* --- MODERN CSS VARIABLES (Same as GRN Page) --- */
-        :root {
-            --primary: #4f46e5;
-            --primary-hover: #4338ca;
-            --bg-body: #f3f4f6;
-            --bg-card: #ffffff;
-            --text-main: #111827;
-            --text-muted: #6b7280;
-            --border: #e5e7eb;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-            --radius: 8px;
-            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-body);
-            color: var(--text-main);
-            margin: 0;
-            padding-bottom: 60px;
-        }
-
-        /* --- LAYOUT --- */
         .container {
             max-width: 100%;
             margin: 0 auto;
             padding: 20px;
-
-        }
-
-        .badge {
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-
-        .badge.GRN_IN {
-            background: #dcfce7;
-            color: #166534;
-        }
-
-        .badge.GRN_OUT {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-
-        .badge.PRODUCTION_OUT {
-            background: #fef3c7;
-            color: #92400e;
         }
 
         @media (max-width: 992px) {
             .container {
-                margin-left: 0;
                 padding: 15px;
             }
-        }
-
-        .page-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 24px;
-        }
-
-        .page-title {
-            font-size: 1.75rem;
-            font-weight: 700;
-            color: var(--text-main);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .page-title i {
-            color: var(--primary);
         }
 
         /* --- TABS NAVIGATION --- */
@@ -427,7 +291,6 @@ function formatDate($date)
             gap: 10px;
             overflow-x: auto;
             padding-bottom: 2px;
-            /* For focus ring visibility */
         }
 
         .tab-btn {
@@ -454,7 +317,7 @@ function formatDate($date)
             border-bottom-color: var(--primary);
         }
 
-        /* --- TAB CONTENT AREAS --- */
+        /* --- TAB CONTENT AREAS (With Animation) --- */
         .tab-content {
             display: none;
             animation: fadeIn 0.3s ease;
@@ -476,179 +339,7 @@ function formatDate($date)
             }
         }
 
-        /* --- CARDS & TABLES --- */
-        .card {
-            background: var(--bg-card);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            border: 1px solid var(--border);
-            margin-bottom: 24px;
-            overflow: hidden;
-        }
-
-        .card-header {
-            padding: 16px 20px;
-            border-bottom: 1px solid var(--border);
-            background: #f9fafb;
-            font-weight: 600;
-            font-size: 1rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .table-responsive {
-            overflow-x: auto;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 700px;
-        }
-
-        th {
-            background: #f9fafb;
-            text-align: left;
-            padding: 12px 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            border-bottom: 1px solid var(--border);
-        }
-
-        td {
-            padding: 14px 20px;
-            border-bottom: 1px solid var(--border);
-            font-size: 0.95rem;
-            color: var(--text-main);
-            vertical-align: middle;
-        }
-
-        tr:last-child td {
-            border-bottom: none;
-        }
-
-        tr:hover td {
-            background-color: #f9fafb;
-        }
-
-        /* --- BUTTONS --- */
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 10px 20px;
-            border-radius: var(--radius);
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-            border: none;
-            gap: 8px;
-            text-decoration: none;
-            font-size: 0.9rem;
-        }
-
-        .btn-primary {
-            background: var(--primary);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: var(--primary-hover);
-            transform: translateY(-1px);
-        }
-
-        .btn-outline {
-            background: white;
-            border: 1px solid var(--border);
-            color: var(--text-main);
-        }
-
-        .btn-outline:hover {
-            background: #f9fafb;
-            border-color: #d1d5db;
-        }
-
-        .action-link {
-            color: var(--primary);
-            text-decoration: none;
-            font-weight: 500;
-            font-size: 0.9rem;
-        }
-
-        .action-link:hover {
-            text-decoration: underline;
-        }
-
-        /* --- BADGES --- */
-        .stock-badge {
-            padding: 4px 10px;
-            border-radius: 99px;
-            font-size: 0.75rem;
-            font-weight: 700;
-        }
-
-        .stock-ok {
-            background: #d1fae5;
-            color: #065f46;
-        }
-
-        .stock-low {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-
-        .stock-wip {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        /* --- MODAL --- */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 2000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(2px);
-        }
-
-        .modal-content {
-            background: white;
-            margin: 5% auto;
-            width: 90%;
-            max-width: 800px;
-            border-radius: 12px;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-        }
-
-        .modal-header {
-            padding: 20px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .modal-body {
-            padding: 20px;
-            max-height: 70vh;
-            overflow-y: auto;
-        }
-
-        .close-modal {
-            font-size: 24px;
-            cursor: pointer;
-            color: #666;
-        }
-
-        /* GRN Detail Styles inside Modal */
+        /* --- GRN SPECIFIC STYLES INSIDE MODAL --- */
         .grn-info-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -675,15 +366,15 @@ function formatDate($date)
 
     <div class="container">
 
-        <div class="page-header">
+        <div class="page-header" style="margin-bottom: 25px;">
             <div class="page-title">
-                <i class="fas fa-boxes-stacked"></i> Inventory Overview
+                <i class="fas fa-boxes-stacked text-primary" style="margin-right:8px;"></i> Inventory Overview
             </div>
-            <div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
                 <a href="grn.php" class="btn btn-primary">
-                    <i class="fas fa-plus"></i> Add New GRN (Inward)
+                    <i class="fas fa-plus"></i> Add New GRN
                 </a>
-                <a href="production_entry.php" class="btn btn-outline" style="margin-left:10px;">
+                <a href="production_entry.php" class="btn btn-outline">
                     <i class="fas fa-industry"></i> Production Entry
                 </a>
             </div>
@@ -710,7 +401,7 @@ function formatDate($date)
                     <span>Current Seed Stock</span>
                     <span class="stock-badge stock-ok"><?= count($seeds_stock) ?> Items</span>
                 </div>
-                <div class="table-responsive">
+                <div class="table-wrap" style="border:none; box-shadow:none; border-radius:0;">
                     <table>
                         <thead>
                             <tr>
@@ -718,30 +409,32 @@ function formatDate($date)
                                 <th>Category</th>
                                 <th>Current Stock (Kg)</th>
                                 <th>Status</th>
-                                <th>Action</th>
+                                <th style="text-align:right;">Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($seeds_stock)): ?>
                                 <tr>
-                                    <td colspan="5" style="text-align:center; padding:20px; color:#999;">No seeds found. Add stock via GRN.</td>
+                                    <td colspan="5" style="text-align:center; padding:30px; color:#999;">No seeds found. Add stock via GRN.</td>
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($seeds_stock as $seed): ?>
                                     <tr>
-                                        <td><strong><?= htmlspecialchars($seed['name']) ?></strong></td>
+                                        <td style="color:var(--text-main); font-weight:600;"><?= htmlspecialchars($seed['name']) ?></td>
                                         <td><?= htmlspecialchars($seed['category']) ?></td>
-                                        <td style="font-weight:bold;"><?= number_format($seed['current_stock'], 3) ?></td>
+                                        <td style="font-weight:700; color:var(--text-main);"><?= number_format($seed['current_stock'], 3) ?></td>
                                         <td>
                                             <?php if ($seed['current_stock'] < 100): ?>
-                                                <span class="stock-badge stock-low">Low</span>
+                                                <span class="badge stock-low">Low</span>
                                             <?php else: ?>
-                                                <span class="stock-badge stock-ok">In Stock</span>
+                                                <span class="badge stock-ok">In Stock</span>
                                             <?php endif; ?>
                                         </td>
-                                        <td><button class="btn btn-outline btn-sm" onclick="viewLedger(<?= $seed['id'] ?>, '<?= htmlspecialchars($seed['name']) ?>')">
+                                        <td style="text-align:right;">
+                                            <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="viewLedger(<?= $seed['id'] ?>, '<?= htmlspecialchars($seed['name']) ?>')">
                                                 <i class="fas fa-book"></i> Ledger
-                                            </button></td>
+                                            </button>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -756,7 +449,7 @@ function formatDate($date)
                 <div class="card-header">
                     <span>Work In Progress (Oil & Cake)</span>
                 </div>
-                <div class="table-responsive">
+                <div class="table-wrap" style="border:none; box-shadow:none; border-radius:0;">
                     <table>
                         <thead>
                             <tr>
@@ -764,29 +457,29 @@ function formatDate($date)
                                 <th>Type</th>
                                 <th>Storage Location</th>
                                 <th>Quantity (Kg)</th>
-                                <th>Action</th>
+                                <th style="text-align:right;">Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($loose_stock)): ?>
                                 <tr>
-                                    <td colspan="5" style="text-align:center; padding:20px; color:#999;">
+                                    <td colspan="5" style="text-align:center; padding:30px; color:#999;">
                                         No loose stock found. Process seeds to generate stock.
                                     </td>
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($loose_stock as $item): ?>
                                     <tr>
-                                        <td><strong><?= htmlspecialchars($item['seed_name']) ?></strong></td>
+                                        <td style="color:var(--text-main); font-weight:600;"><?= htmlspecialchars($item['seed_name']) ?></td>
                                         <td>
                                             <span class="badge" style="background:<?= $item['product_type'] == 'OIL' ? '#fff7ed' : '#ecfccb' ?>; color:<?= $item['product_type'] == 'OIL' ? '#c2410c' : '#3f6212' ?>;">
                                                 <?= $item['product_type'] ?>
                                             </span>
                                         </td>
                                         <td><?= htmlspecialchars($item['storage_location']) ?></td>
-                                        <td style="font-weight:bold;"><?= number_format($item['current_qty'], 2) ?></td>
-                                        <td>
-                                            <button class="btn btn-outline btn-sm"
+                                        <td style="font-weight:700; color:var(--text-main);"><?= number_format($item['current_qty'], 2) ?></td>
+                                        <td style="text-align:right;">
+                                            <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;"
                                                 onclick="viewLooseLedger(<?= $item['seed_id'] ?>, '<?= $item['product_type'] ?>', '<?= htmlspecialchars($item['display_name']) ?>')">
                                                 <i class="fas fa-book"></i> Ledger
                                             </button>
@@ -804,11 +497,11 @@ function formatDate($date)
             <div class="card">
                 <div class="card-header">
                     <span>Packaging Consumables</span>
-                    <button class="btn btn-primary btn-sm" style="width:auto;" onclick="openPackModal()">
-                        <i class="fas fa-plus"></i> Add Stock / New Item
+                    <button class="btn btn-primary" style="padding:6px 15px; font-size:0.85rem;" onclick="openPackModal()">
+                        <i class="fas fa-plus"></i> Add Stock / New
                     </button>
                 </div>
-                <div class="table-responsive">
+                <div class="table-wrap" style="border:none; box-shadow:none; border-radius:0;">
                     <table>
                         <thead>
                             <tr>
@@ -821,21 +514,21 @@ function formatDate($date)
                         <tbody>
                             <?php if (empty($packing_stock)): ?>
                                 <tr>
-                                    <td colspan="4" style="text-align:center; padding:20px; color:#999;">No packaging material defined.</td>
+                                    <td colspan="4" style="text-align:center; padding:30px; color:#999;">No packaging material defined.</td>
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($packing_stock as $item): ?>
                                     <tr>
-                                        <td>
-                                            <strong><?= htmlspecialchars($item['item_name']) ?></strong>
+                                        <td style="color:var(--text-main); font-weight:600;">
+                                            <?= htmlspecialchars($item['item_name']) ?>
                                         </td>
-                                        <td><span class="badge" style="background:#f3f4f6;"><?= $item['category'] ?? 'General' ?></span></td>
-                                        <td style="font-weight:bold;"><?= number_format($item['quantity']) ?> <?= $item['unit'] ?></td>
+                                        <td><span class="badge bg-gray"><?= $item['category'] ?? 'General' ?></span></td>
+                                        <td style="font-weight:700; color:var(--text-main);"><?= number_format($item['quantity']) ?> <?= $item['unit'] ?></td>
                                         <td>
                                             <?php if ($item['quantity'] <= $item['alert_level']): ?>
-                                                <span class="stock-badge stock-low">Low Stock</span>
+                                                <span class="badge stock-low">Low Stock</span>
                                             <?php else: ?>
-                                                <span class="stock-badge stock-ok">OK</span>
+                                                <span class="badge stock-ok">OK</span>
                                             <?php endif; ?>
                                         </td>
                                     </tr>
@@ -852,7 +545,7 @@ function formatDate($date)
                 <div class="card-header">
                     <span>Ready for Sale (Packed)</span>
                 </div>
-                <div class="table-responsive">
+                <div class="table-wrap" style="border:none; box-shadow:none; border-radius:0;">
                     <table>
                         <thead>
                             <tr>
@@ -865,14 +558,14 @@ function formatDate($date)
                         <tbody>
                             <?php if (empty($finished_stock)): ?>
                                 <tr>
-                                    <td colspan="4" style="text-align:center; padding:20px; color:#999;">No finished goods in stock.</td>
+                                    <td colspan="4" style="text-align:center; padding:30px; color:#999;">No finished goods in stock.</td>
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($finished_stock as $prod): ?>
                                     <tr>
-                                        <td><?= htmlspecialchars($prod['product_name']) ?></td>
+                                        <td style="color:var(--text-main); font-weight:600;"><?= htmlspecialchars($prod['product_name']) ?></td>
                                         <td><?= htmlspecialchars($prod['batch_no']) ?></td>
-                                        <td><?= number_format($prod['qty']) ?> <?= $prod['unit'] ?></td>
+                                        <td style="font-weight:700; color:var(--text-main);"><?= number_format($prod['qty']) ?> <?= $prod['unit'] ?></td>
                                         <td><?= date('d M Y', strtotime($prod['mfg_date'])) ?></td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -884,11 +577,11 @@ function formatDate($date)
         </div>
 
         <h3 style="margin-top:40px; margin-bottom:15px; font-size:1.2rem; color:var(--text-main);">
-            <i class="fas fa-history" style="color:var(--text-muted);"></i> Recent GRN History
+            <i class="fas fa-history text-muted" style="margin-right:8px;"></i> Recent GRN History
         </h3>
 
         <div class="card">
-            <div class="table-responsive">
+            <div class="table-wrap" style="border:none; box-shadow:none; border-radius:0;">
                 <table>
                     <thead>
                         <tr>
@@ -898,25 +591,25 @@ function formatDate($date)
                             <th>Total Weight</th>
                             <th>Total Value</th>
                             <th>Date</th>
-                            <th>Action</th>
+                            <th style="text-align:right;">Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php if (empty($grn_list)): ?>
                             <tr>
-                                <td colspan="7" style="text-align:center; padding:20px;">No records found</td>
+                                <td colspan="7" style="text-align:center; padding:30px; color:#999;">No records found</td>
                             </tr>
                         <?php else: ?>
                             <?php foreach ($grn_list as $grn): ?>
                                 <tr>
-                                    <td style="color:var(--primary); font-weight:600;"><?= $grn['grn_no'] ?></td>
+                                    <td style="color:var(--primary); font-weight:700;"><?= $grn['grn_no'] ?></td>
                                     <td><?= htmlspecialchars($grn['seller_name']) ?></td>
                                     <td><?= htmlspecialchars($grn['vehicle_no']) ?></td>
                                     <td><?= number_format($grn['total_weight_kg'], 2) ?> kg</td>
-                                    <td style="color:var(--success); font-weight:600;"><?= formatCurrency($grn['total_value']) ?></td>
+                                    <td style="color:var(--success); font-weight:700;"><?= formatCurrency($grn['total_value']) ?></td>
                                     <td><?= formatDate($grn['created_at']) ?></td>
-                                    <td>
-                                        <button class="btn btn-outline" style="padding:5px 10px; font-size:0.8rem;" onclick="viewGRN(<?= $grn['id'] ?>)">
+                                    <td style="text-align:right;">
+                                        <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="viewGRN(<?= $grn['id'] ?>)">
                                             View
                                         </button>
                                     </td>
@@ -929,50 +622,52 @@ function formatDate($date)
         </div>
 
     </div>
-    <div id="grnModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 style="margin:0;">GRN Details</h3>
-                <span class="close-modal" onclick="closeModal()">&times;</span>
+
+    <div id="grnModal" class="global-modal">
+        <div class="g-modal-content">
+            <div class="g-modal-header">
+                <h3 style="margin:0; font-size:1.1rem;"><i class="fas fa-file-invoice text-primary"></i> GRN Details</h3>
+                <button class="g-close-btn" onclick="closeModal()">&times;</button>
             </div>
-            <div class="modal-body" id="grnModalBody">
-                <div style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+            <div class="g-modal-body" id="grnModalBody">
+                <div style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin fa-2x text-muted"></i></div>
             </div>
         </div>
     </div>
-    <div id="ledgerModal" class="modal">
-        <div class="modal-content" style="max-width:900px;">
-            <div class="modal-header">
+
+    <div id="ledgerModal" class="global-modal">
+        <div class="g-modal-content" style="max-width:900px;">
+            <div class="g-modal-header">
                 <div>
-                    <h3 style="margin:0;">Item Ledger</h3>
-                    <small id="ledgerItemName" style="color:var(--primary); font-weight:600;">Loading...</small>
+                    <h3 style="margin:0; font-size:1.1rem;"><i class="fas fa-book text-primary"></i> Item Ledger</h3>
+                    <small id="ledgerItemName" style="color:var(--text-muted); font-weight:600;">Loading...</small>
                 </div>
-                <span class="close-modal" onclick="closeLedgerModal()">&times;</span>
+                <button class="g-close-btn" onclick="closeLedgerModal()">&times;</button>
             </div>
-            <div class="modal-body" id="ledgerBody">
+            <div class="g-modal-body" id="ledgerBody">
             </div>
         </div>
     </div>
-    <div id="packModal" class="modal">
-        <div class="modal-content" style="max-width:600px;">
-            <div class="modal-header">
-                <h3 style="margin:0;">Add Packaging Stock</h3>
-                <span class="close-modal" onclick="closePackModal()">&times;</span>
+
+    <div id="packModal" class="global-modal">
+        <div class="g-modal-content" style="max-width:600px;">
+            <div class="g-modal-header">
+                <h3 style="margin:0; font-size:1.1rem;"><i class="fas fa-box text-primary"></i> Add Packaging Stock</h3>
+                <button class="g-close-btn" onclick="closePackModal()">&times;</button>
             </div>
-            <div class="modal-body">
+            <div class="g-modal-body">
                 <form id="packForm">
                     <input type="hidden" name="action" value="add_packaging">
 
                     <div class="form-group" style="margin-bottom:15px;">
-                        <label style="font-weight:600; display:block; margin-bottom:5px;">Item Name</label>
-                        <input type="text" name="p_name" class="form-control" placeholder="e.g. 15 Kg Tin" required
-                            style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
+                        <label class="form-label">Item Name</label>
+                        <input type="text" name="p_name" class="form-input" placeholder="e.g. 15 Kg Tin" required>
                     </div>
 
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">
-                        <div>
-                            <label style="font-weight:600; display:block; margin-bottom:5px;">Category</label>
-                            <select name="p_category" class="form-control" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
+                        <div class="form-group">
+                            <label class="form-label">Category</label>
+                            <select name="p_category" class="form-input">
                                 <option value="Tin">Tin (Peepa)</option>
                                 <option value="Bottle">Bottle</option>
                                 <option value="Cap">Cap</option>
@@ -983,12 +678,11 @@ function formatDate($date)
                                 <option value="Other">Other</option>
                             </select>
                         </div>
-                        <div>
-                            <label style="font-weight:600; display:block; margin-bottom:5px;">Supplier (Vendor)</label>
-                            <select name="p_vendor" class="form-control" required style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
+                        <div class="form-group">
+                            <label class="form-label">Supplier (Vendor)</label>
+                            <select name="p_vendor" class="form-input" required>
                                 <option value="">-- Select Supplier --</option>
                                 <?php
-                                // Only show vendors with category 'Packaging' or 'Both'
                                 if (!empty($vendors)) {
                                     foreach ($vendors as $v) {
                                         echo "<option value='{$v['id']}'>{$v['name']}</option>";
@@ -998,26 +692,21 @@ function formatDate($date)
                                 }
                                 ?>
                             </select>
-                            <small style="display:block; margin-top:5px; font-size:0.8rem;">
-                                <a href="#" style="color:var(--primary);">+ Add New Vendor</a>
-                            </small>
                         </div>
                     </div>
 
                     <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:15px;">
-                        <div>
-                            <label style="font-weight:600; display:block; margin-bottom:5px;">Quantity (+)</label>
-                            <input type="number" name="p_qty" class="form-control" placeholder="0" required oninput="calcTotal()"
-                                style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
+                        <div class="form-group">
+                            <label class="form-label">Quantity (+)</label>
+                            <input type="number" name="p_qty" class="form-input" placeholder="0" required oninput="calcTotal()">
                         </div>
-                        <div>
-                            <label style="font-weight:600; display:block; margin-bottom:5px;">Rate / Pc (₹)</label>
-                            <input type="number" name="p_rate" class="form-control" placeholder="0.00" step="0.01" required oninput="calcTotal()"
-                                style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
+                        <div class="form-group">
+                            <label class="form-label">Rate / Pc (₹)</label>
+                            <input type="number" name="p_rate" class="form-input" placeholder="0.00" step="0.01" required oninput="calcTotal()">
                         </div>
-                        <div>
-                            <label style="font-weight:600; display:block; margin-bottom:5px;">Unit</label>
-                            <select name="p_unit" class="form-control" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
+                        <div class="form-group">
+                            <label class="form-label">Unit</label>
+                            <select name="p_unit" class="form-input">
                                 <option value="Pcs">Pcs</option>
                                 <option value="Kg">Kg</option>
                                 <option value="Roll">Roll</option>
@@ -1025,13 +714,13 @@ function formatDate($date)
                         </div>
                     </div>
 
-                    <div class="live-stats" style="background:#f0fdf4; padding:10px; border:1px solid #bbf7d0; margin-bottom:15px; border-radius:6px; text-align:center;">
-                        <span style="color:#166534; font-weight:bold;">Total Cost: ₹<span id="totalCostDisplay">0.00</span></span>
+                    <div style="background:#f0fdf4; padding:12px; border:1px solid #bbf7d0; margin-bottom:15px; border-radius:6px; text-align:center;">
+                        <span style="color:#166534; font-weight:700; font-size:1.1rem;">Total Cost: ₹<span id="totalCostDisplay">0.00</span></span>
                     </div>
 
                     <div class="form-group" style="margin-bottom:20px;">
-                        <label style="font-weight:600; display:block; margin-bottom:5px;">Payment Mode</label>
-                        <select name="p_payment_mode" class="form-control" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
+                        <label class="form-label">Payment Mode</label>
+                        <select name="p_payment_mode" class="form-input">
                             <option value="Credit">Credit (Udhaar)</option>
                             <option value="Cash">Cash</option>
                             <option value="Online">Online / UPI</option>
@@ -1047,31 +736,31 @@ function formatDate($date)
     </div>
 
 
-
     <script>
         function calcTotal() {
             const qty = parseFloat(document.querySelector('input[name="p_qty"]').value) || 0;
             const rate = parseFloat(document.querySelector('input[name="p_rate"]').value) || 0;
             document.getElementById('totalCostDisplay').innerText = (qty * rate).toFixed(2);
         }
+
+        // 🌟 FIX: Updated Modals logic to use classList.add('active') 🌟
+
         // PACKAGING MODAL LOGIC
         const packModal = document.getElementById('packModal');
 
         function openPackModal() {
-            packModal.style.display = 'block';
+            packModal.classList.add('active');
         }
 
         function closePackModal() {
-            packModal.style.display = 'none';
+            packModal.classList.remove('active');
         }
 
         // Close on click outside
         window.onclick = function(e) {
             if (e.target == packModal) closePackModal();
-            // Existing modal logic
             if (e.target == document.getElementById('grnModal')) closeModal();
             if (e.target == document.getElementById('ledgerModal')) closeLedgerModal();
-            if (e.target == document.getElementById('seedModal')) closeSeedModal();
         }
 
         // AJAX SUBMIT
@@ -1079,7 +768,7 @@ function formatDate($date)
             e.preventDefault();
             if (!confirm("Confirm adding this packaging stock?")) return;
 
-            const btn = this.querySelector('button');
+            const btn = this.querySelector('button[type="submit"]');
             const originalText = btn.innerText;
             btn.innerText = "Saving...";
             btn.disabled = true;
@@ -1107,13 +796,14 @@ function formatDate($date)
                     btn.disabled = false;
                 });
         });
+
         // --- LOOSE STOCK LEDGER LOGIC ---
+        const ledgerModal = document.getElementById('ledgerModal');
+
         function viewLooseLedger(seedId, prodType, displayName) {
-            // Reusing the existing ledgerModal
-            const ledgerModal = document.getElementById('ledgerModal');
             document.getElementById('ledgerItemName').innerText = displayName;
-            ledgerModal.style.display = 'block';
-            document.getElementById('ledgerBody').innerHTML = '<div style="text-align:center; padding:30px;"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
+            ledgerModal.classList.add('active');
+            document.getElementById('ledgerBody').innerHTML = '<div style="text-align:center; padding:30px;"><i class="fas fa-spinner fa-spin fa-2x text-muted"></i></div>';
 
             const fd = new FormData();
             fd.append('action', 'get_loose_ledger');
@@ -1132,23 +822,22 @@ function formatDate($date)
 
                         res.data.forEach(row => {
                             let qty = parseFloat(row.quantity);
-                            let type = row.transaction_type; // RAW_IN, RAW_OUT
+                            let type = row.transaction_type;
                             let color = 'black';
 
-                            // Logic for Balance Calculation based on raw_material_inventory ENUMs
                             if (type === 'RAW_IN' || type === 'ADJUSTMENT_IN') {
                                 balance += qty;
                                 color = 'green';
                             } else {
                                 balance -= qty;
                                 color = 'red';
-                                qty = -qty; // Visual negative
+                                qty = -qty;
                             }
 
                             rows += `
                                 <tr>
                                     <td>${row.date}</td>
-                                    <td><span class="badge" style="font-size:0.7rem; background:#f3f4f6;">${type}</span></td>
+                                    <td><span class="badge bg-gray" style="font-size:0.7rem;">${type}</span></td>
                                     <td>${row.batch_no || '-'}</td>
                                     <td><small>${row.notes || '-'}</small></td>
                                     <td style="color:${color}; font-weight:bold;">${qty.toFixed(2)}</td>
@@ -1158,43 +847,42 @@ function formatDate($date)
                         });
 
                         const html = `
-                            <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
-                                <thead>
-                                    <tr style="background:#f3f4f6; text-align:left;">
-                                        <th style="padding:10px;">Date</th>
-                                        <th>Type</th>
-                                        <th>Batch</th>
-                                        <th>Notes</th>
-                                        <th>Qty</th>
-                                        <th>Bal</th>
-                                    </tr>
-                                </thead>
-                                <tbody>${rows}</tbody>
-                            </table>
+                            <div class="table-wrap" style="border:none; box-shadow:none;">
+                                <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Type</th>
+                                            <th>Batch</th>
+                                            <th>Notes</th>
+                                            <th>Qty</th>
+                                            <th>Bal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>${rows}</tbody>
+                                </table>
+                            </div>
                         `;
                         document.getElementById('ledgerBody').innerHTML = html;
                     } else {
-                        document.getElementById('ledgerBody').innerHTML = '<p style="color:#666; text-align:center; padding:20px;">No transaction history found for this item.</p>';
+                        document.getElementById('ledgerBody').innerHTML = '<p style="color:#64748b; text-align:center; padding:20px;">No transaction history found for this item.</p>';
                     }
                 })
                 .catch(err => {
-                    console.error(err);
                     document.getElementById('ledgerBody').innerHTML = '<p style="color:red; text-align:center;">System Error</p>';
                 });
         }
-        // --- LEDGER LOGIC ---
-        const ledgerModal = document.getElementById('ledgerModal');
 
+        // --- LEDGER LOGIC ---
         function viewLedger(seedId, seedName) {
             document.getElementById('ledgerItemName').innerText = seedName;
-            ledgerModal.style.display = 'block';
-            document.getElementById('ledgerBody').innerHTML = '<div style="text-align:center; padding:30px;"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
+            ledgerModal.classList.add('active');
+            document.getElementById('ledgerBody').innerHTML = '<div style="text-align:center; padding:30px;"><i class="fas fa-spinner fa-spin fa-2x text-muted"></i></div>';
 
             const fd = new FormData();
             fd.append('action', 'get_seed_ledger');
             fd.append('seed_id', seedId);
 
-            // Call same file or a handler file
             fetch('inventory.php', {
                     method: 'POST',
                     body: fd
@@ -1209,21 +897,23 @@ function formatDate($date)
                             let qty = parseFloat(row.quantity);
                             let type = row.transaction_type;
                             let color = 'black';
+                            let badgeClass = 'bg-gray';
 
-                            // Logic for In/Out and Balance
                             if (type === 'GRN_IN' || type === 'PRODUCTION_IN' || type === 'ADJUSTMENT_IN') {
                                 balance += qty;
                                 color = 'green';
+                                badgeClass = 'GRN_IN';
                             } else {
                                 balance -= qty;
                                 color = 'red';
-                                qty = -qty; // Show negative for OUT
+                                qty = -qty;
+                                badgeClass = 'GRN_OUT';
                             }
 
                             rows += `
                     <tr>
                         <td>${row.date}</td>
-                        <td><span class="badge ${type}">${type}</span></td>
+                        <td><span class="badge ${badgeClass}">${type}</span></td>
                         <td>${row.batch_no || '-'}</td>
                         <td>${row.notes || '-'}</td>
                         <td style="color:${color}; font-weight:bold;">${qty.toFixed(2)}</td>
@@ -1233,19 +923,21 @@ function formatDate($date)
                         });
 
                         const html = `
-                <table style="width:100%; border-collapse:collapse;">
-                    <thead>
-                        <tr style="background:#f3f4f6; text-align:left;">
-                            <th style="padding:10px;">Date</th>
-                            <th>Type</th>
-                            <th>Batch/Ref</th>
-                            <th>Notes</th>
-                            <th>Qty</th>
-                            <th>Balance</th>
-                        </tr>
-                    </thead>
-                    <tbody>${rows}</tbody>
-                </table>
+                <div class="table-wrap" style="border:none; box-shadow:none;">
+                    <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Batch/Ref</th>
+                                <th>Notes</th>
+                                <th>Qty</th>
+                                <th>Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
             `;
                         document.getElementById('ledgerBody').innerHTML = html;
                     } else {
@@ -1253,24 +945,21 @@ function formatDate($date)
                     }
                 })
                 .catch(err => {
-                    console.error(err);
                     document.getElementById('ledgerBody').innerHTML = '<p style="color:red; text-align:center;">System Error</p>';
                 });
         }
 
         function closeLedgerModal() {
-            ledgerModal.style.display = 'none';
+            ledgerModal.classList.remove('active');
         }
+
         // --- TAB SWITCHER ---
         function openTab(tabId) {
-            // Hide all tabs
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
 
-            // Show selected
             document.getElementById(tabId).classList.add('active');
-            // Highlight button (find button that called this, but simpler to loop logic if passed 'this')
-            // Here we just find button with onclick matching ID
+
             const btns = document.getElementsByClassName('tab-btn');
             for (let btn of btns) {
                 if (btn.getAttribute('onclick').includes(tabId)) {
@@ -1280,14 +969,13 @@ function formatDate($date)
         }
 
         // --- GRN MODAL LOGIC ---
-        const modal = document.getElementById('grnModal');
-        const modalBody = document.getElementById('grnModalBody');
+        const modalGRN = document.getElementById('grnModal');
+        const modalBodyGRN = document.getElementById('grnModalBody');
 
         function viewGRN(id) {
-            modal.style.display = 'block';
-            modalBody.innerHTML = '<div style="text-align:center; padding:30px;"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
+            modalGRN.classList.add('active');
+            modalBodyGRN.innerHTML = '<div style="text-align:center; padding:30px;"><i class="fas fa-spinner fa-spin fa-2x text-muted"></i></div>';
 
-            // AJAX Call
             const fd = new FormData();
             fd.append('action', 'get_grn_details');
             fd.append('grn_id', id);
@@ -1306,61 +994,62 @@ function formatDate($date)
                                 <tr>
                                     <td>${item.seed_name} (${item.category})</td>
                                     <td>₹${parseFloat(item.price_per_qtl).toFixed(2)}</td>
-                                    <td>${parseFloat(item.weight_kg).toFixed(3)} kg</td>
-                                    <td style="text-align:right;">₹${parseFloat(item.line_value).toFixed(2)}</td>
+                                    <td style="font-weight:600;">${parseFloat(item.weight_kg).toFixed(3)} kg</td>
+                                    <td style="text-align:right; font-weight:600; color:var(--text-main);">₹${parseFloat(item.line_value).toFixed(2)}</td>
                                 </tr>
                             `;
                         });
 
-                        modalBody.innerHTML = `
+                        modalBodyGRN.innerHTML = `
                             <div class="grn-info-grid">
-                                <div><span class="grn-label">GRN NO:</span> <div class="grn-val" style="color:var(--primary);">${g.grn_no}</div></div>
+                                <div><span class="grn-label">GRN NO:</span> <div class="grn-val" style="color:var(--primary); font-size:1.1rem;">${g.grn_no}</div></div>
                                 <div><span class="grn-label">Date:</span> <div class="grn-val">${new Date(g.created_at).toLocaleString()}</div></div>
                                 <div><span class="grn-label">Seller:</span> <div class="grn-val">${g.seller_name}</div></div>
                                 <div><span class="grn-label">Vehicle:</span> <div class="grn-val">${g.vehicle_no}</div></div>
                             </div>
-                            <div style="margin-top:20px; border:1px solid var(--border); border-radius:8px; overflow:hidden;">
+                            
+                            <div class="table-wrap" style="margin-top:20px;">
                                 <table>
-                                    <thead style="background:#f9fafb;">
-                                        <tr><th>Item</th><th>Rate</th><th>Weight</th><th style="text-align:right;">Total</th></tr>
+                                    <thead>
+                                        <tr><th>Item</th><th>Rate (Qtl)</th><th>Weight</th><th style="text-align:right;">Total</th></tr>
                                     </thead>
                                     <tbody>${itemsHtml}</tbody>
-                                    <tfoot style="background:#f9fafb; font-weight:bold;">
-                                        <tr>
-                                            <td colspan="2" style="text-align:right;">Total:</td>
-                                            <td>${parseFloat(g.total_weight_kg).toFixed(3)} kg</td>
-                                            <td style="text-align:right;">₹${parseFloat(g.total_value).toFixed(2)}</td>
+                                    <tfoot>
+                                        <tr style="background:#f8fafc;">
+                                            <td colspan="2" style="text-align:right; font-weight:700;">Total:</td>
+                                            <td style="font-weight:700;">${parseFloat(g.total_weight_kg).toFixed(3)} kg</td>
+                                            <td style="text-align:right; font-weight:800; font-size:1.1rem; color:var(--success);">₹${parseFloat(g.total_value).toFixed(2)}</td>
                                         </tr>
                                     </tfoot>
                                 </table>
                             </div>
-                            <div style="text-align:right; margin-top:20px;">
-<button class="btn btn-outline" onclick="window.open('print_engine.php?doc=grn_receipt&id=${id}', 'ThermalPrint', 'width=400,height=600')">
-    <i class="fas fa-print"></i> Print Receipt
-</button>                                   <button class="btn btn-primary" onclick="closeModal()">Close</button>
+                            <div style="text-align:right; margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
+                                <button class="btn btn-outline" onclick="window.location.href='print_engine.php?doc=grn_receipt&id=${id}'">
+                                    <i class="fas fa-print text-primary"></i> Print Receipt
+                                </button>
+                                <button class="btn btn-primary" onclick="closeModal()">Close</button>
                             </div>
                         `;
                     } else {
-                        modalBody.innerHTML = `<p style="color:red; text-align:center;">Error: ${res.error}</p>`;
+                        modalBodyGRN.innerHTML = `<p style="color:red; text-align:center;">Error: ${res.error}</p>`;
                     }
                 })
                 .catch(err => {
-                    modalBody.innerHTML = `<p style="color:red; text-align:center;">Network Error</p>`;
+                    modalBodyGRN.innerHTML = `<p style="color:red; text-align:center;">Network Error</p>`;
                 });
         }
 
         function closeModal() {
-            modal.style.display = 'none';
-        }
-
-        // Close on outside click
-        window.onclick = function(e) {
-            if (e.target == modal) closeModal();
+            modalGRN.classList.remove('active');
         }
 
         // Close on Escape key
         document.addEventListener('keydown', function(e) {
-            if (e.key === "Escape") closeModal();
+            if (e.key === "Escape") {
+                closeModal();
+                closeLedgerModal();
+                closePackModal();
+            }
         });
     </script>
 </body>

@@ -1,5 +1,5 @@
 <?php
-// pos.php - UPDATED WITH SEEDS & RAW MATERIAL SUPPORT
+// pos.php - INTEGRATED WITH MASTER CSS
 require_once 'config.php';
 session_start();
 
@@ -97,352 +97,93 @@ if ($lowResult) {
     <title>Trishe POS System</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="css/admin_style.css">
+
     <style>
-        :root {
-            --pos-bg: #f3f4f6;
-            --pos-card-bg: #ffffff;
-            --pos-text: #1f2937;
-            --pos-accent: #3b82f6;
-            --pos-border: #e5e7eb;
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        /* POS SPECIFIC LAYOUT OVERRIDES */
+        body { 
+            height: 100vh; overflow: hidden; 
+            padding-bottom: 0; /* Remove default bottom padding for POS */
         }
 
-        * {
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-        }
+        .pos-container { display: flex; height: 100vh; overflow: hidden; width: 100%; }
 
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--pos-bg);
-            margin: 0;
-            padding: 0;
-            height: 100vh;
-            overflow: hidden;
-        }
-
-        .pos-container {
-            display: flex;
-            height: 100vh;
-            overflow: hidden;
-            width: 100%;
-        }
-
-        .pos-main {
-            flex: 1;
-            padding: 15px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            padding-bottom: 80px;
-        }
+        .pos-main { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; padding-bottom: 20px; }
 
         /* Search & Filter Section */
-        .search-section {
-            background: var(--pos-card-bg);
-            padding: 12px;
-            border-radius: 12px;
-            margin-bottom: 15px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-
-        .search-row {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .search-group {
-            flex: 1;
-            min-width: 150px;
-        }
-
-        .search-input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid var(--pos-border);
-            border-radius: 8px;
-            background: #f9fafb;
-            outline: none;
-        }
+        .search-section { background: var(--bg-card); padding: 15px; border-radius: var(--radius); margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); border: 1px solid var(--border); }
+        .search-row { display: flex; gap: 10px; flex-wrap: wrap; }
+        .search-group { flex: 1; min-width: 150px; }
+        .search-input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: #f8fafc; outline: none; font-size: 0.95rem; transition: 0.2s; }
+        .search-input:focus { border-color: var(--primary); background: #fff; }
 
         /* Category Tabs */
-        .cat-tabs {
-            display: flex;
-            gap: 8px;
-            margin-top: 10px;
-            overflow-x: auto;
-            padding-bottom: 5px;
-        }
+        .cat-tabs { display: flex; gap: 10px; margin-top: 15px; overflow-x: auto; padding-bottom: 5px; }
+        .cat-btn { padding: 8px 16px; background: #e2e8f0; border-radius: 20px; font-size: 0.85rem; font-weight: 700; color: #475569; cursor: pointer; border: none; white-space: nowrap; transition: 0.2s; }
+        .cat-btn:hover { background: #cbd5e1; }
+        .cat-btn.active { background: var(--primary); color: white; }
 
-        .cat-btn {
-            padding: 6px 15px;
-            background: #e5e7eb;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 700;
-            cursor: pointer;
-            border: none;
-            white-space: nowrap;
-            transition: 0.2s;
-        }
+        /* Stats Row */
+        .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
+        .stat-box { background: var(--bg-card); padding: 15px; border-radius: var(--radius); border: 1px solid var(--border); text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+        .stat-num { font-size: 1.5rem; font-weight: 800; color: var(--text-main); margin-bottom: 4px; }
+        .stat-label { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
 
-        .cat-btn.active {
-            background: var(--pos-accent);
-            color: white;
-        }
+        /* Products Grid */
+        .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; padding-bottom: 20px; }
+        .product-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 15px; display: flex; flex-direction: column; justify-content: space-between; height: 100%; min-height: 160px; position: relative; box-shadow: 0 2px 4px rgba(0,0,0,0.02); transition: 0.2s; }
+        .product-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-color: #cbd5e1; }
+        
+        .type-badge { position: absolute; top: 10px; right: 10px; font-size: 0.65rem; padding: 3px 8px; border-radius: 12px; background: #f1f5f9; text-transform: uppercase; font-weight: 800; color: #64748b; }
+        .product-name { font-weight: 700; font-size: 0.95rem; margin-bottom: 8px; color: var(--text-main); margin-top: 15px; line-height: 1.3; }
+        .product-price { font-weight: 800; color: var(--primary); font-size: 1.1rem; }
 
-        .btn-pos {
-            background: var(--pos-accent);
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        /* Stats & Grid */
-        .stats-row {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-
-        .stat-box {
-            background: var(--pos-card-bg);
-            padding: 10px;
-            border-radius: 8px;
-            border: 1px solid var(--pos-border);
-            text-align: center;
-        }
-
-        .stat-num {
-            font-size: 16px;
-            font-weight: 700;
-            color: var(--pos-text);
-        }
-
-        .stat-label {
-            font-size: 11px;
-            color: #6b7280;
-        }
-
-        .products-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-            gap: 10px;
-            padding-bottom: 20px;
-        }
-
-        .product-card {
-            background: var(--pos-card-bg);
-            border: 1px solid var(--pos-border);
-            border-radius: 10px;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            height: 100%;
-            min-height: 140px;
-            position: relative;
-        }
-
-        .type-badge {
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            font-size: 8px;
-            padding: 2px 5px;
-            border-radius: 10px;
-            background: #f3f4f6;
-            text-transform: uppercase;
-            font-weight: 800;
-            color: #6b7280;
-        }
-
-        .product-name {
-            font-weight: 600;
-            font-size: 13px;
-            margin-bottom: 5px;
-            color: var(--pos-text);
-            margin-top: 10px;
-        }
-
-        .product-price {
-            font-weight: 700;
-            color: var(--pos-accent);
-            font-size: 14px;
-        }
-
-        .product-stock {
-            font-size: 10px;
-            padding: 2px 5px;
-            border-radius: 4px;
-            display: inline-block;
-            margin-top: 5px;
-        }
-
-        .stock-available {
-            background: #d1fae5;
-            color: #065f46;
-        }
-
-        .stock-low {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .stock-out {
-            background: #fee2e2;
-            color: #991b1b;
-            opacity: 0.6;
-        }
+        /* Stock Status overrides for POS cards */
+        .stock-available { color: #059669; font-weight: 700; font-size: 0.8rem; margin-top: 5px; }
+        .stock-low { color: #d97706; font-weight: 700; font-size: 0.8rem; margin-top: 5px; }
+        .stock-out { color: #dc2626; font-weight: 700; font-size: 0.8rem; margin-top: 5px; }
 
         /* Cart Sidebar */
-        .cart-sidebar {
-            width: 350px;
-            background: var(--pos-card-bg);
-            border-left: 1px solid var(--pos-border);
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            right: 0;
-            top: 0;
-            z-index: 2000;
-            box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s ease-in-out;
-        }
+        .cart-sidebar { width: 380px; background: var(--bg-card); border-left: 1px solid var(--border); display: flex; flex-direction: column; height: 100vh; right: 0; top: 0; z-index: 200; box-shadow: -2px 0 10px rgba(0, 0, 0, 0.05); transition: transform 0.3s ease-in-out; }
+        
+        .cart-header { padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #f8fafc; }
+        .cart-items { flex: 1; overflow-y: auto; padding: 15px; }
+        .cart-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px dashed var(--border); }
+        .cart-item strong { color: var(--text-main); font-size: 0.95rem; }
+        
+        .qty-btn { width: 32px; height: 32px; background: #f1f5f9; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-weight: bold; color: var(--text-main); transition: 0.2s; }
+        .qty-btn:hover { background: #e2e8f0; }
 
+        .cart-totals { padding: 20px; background: #f8fafc; border-top: 1px solid var(--border); }
+        .total-row { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px; color: var(--text-muted); font-weight: 500; }
+        .total-row.last { font-size: 1.3rem; font-weight: 800; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; color: var(--text-main); }
+        
+        .checkout-btn { width: 100%; padding: 16px; background: var(--primary); color: white; border: none; font-weight: 800; font-size: 1.1rem; border-radius: 8px; cursor: pointer; margin-top: 10px; transition: 0.2s; box-shadow: 0 4px 6px rgba(79, 70, 229, 0.2); }
+        .checkout-btn:hover { background: var(--primary-hover); transform: translateY(-1px); }
+
+        .pos-tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 15px; border-top: 1px solid var(--border); background: white; }
+        .tool-btn { padding: 10px 5px; background: #f1f5f9; border: 1px solid transparent; border-radius: 8px; font-size: 0.75rem; font-weight: 600; display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: pointer; color: var(--text-muted); transition: 0.2s; }
+        .tool-btn:hover { background: #e2e8f0; color: var(--text-main); }
+        .tool-btn i { font-size: 1.2rem; color: var(--text-main); }
+
+        /* CHECKOUT MODAL FIXES */
+        .g-modal-body input, .g-modal-body select { margin-bottom: 15px; }
+        
         @media(max-width: 992px) {
-            .pos-container {
-                flex-direction: column;
-            }
-
-            .cart-sidebar {
-                width: 100%;
-                height: 85vh;
-                bottom: 0;
-                border-radius: 15px 15px 0 0;
-                position: fixed;
-                transform: translateY(110%);
-            }
-
-            .cart-sidebar.open {
-                transform: translateY(0);
-            }
+            .pos-container { flex-direction: column; }
+            .pos-main { padding-bottom: 80px; }
+            .cart-sidebar { width: 100%; height: 85vh; bottom: 0; top: auto; border-radius: 20px 20px 0 0; position: fixed; transform: translateY(110%); box-shadow: 0 -5px 20px rgba(0,0,0,0.15); }
+            .cart-sidebar.open { transform: translateY(0); }
+            /* Add a toggle button for mobile cart */
+            .mobile-cart-toggle { display: flex; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 100; background: var(--primary); color: white; padding: 15px 30px; border-radius: 30px; font-weight: 700; box-shadow: 0 4px 10px rgba(79, 70, 229, 0.4); border: none; align-items: center; gap: 10px; cursor: pointer; }
         }
 
-        .cart-header {
-            padding: 15px;
-            border-bottom: 1px solid #eee;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .cart-items {
-            flex: 1;
-            overflow-y: auto;
-            padding: 10px;
-        }
-
-        .cart-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-            padding-bottom: 10px;
-            border-bottom: 1px dashed #eee;
-        }
-
-        .qty-btn {
-            width: 28px;
-            height: 28px;
-            background: #f3f4f6;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        .cart-totals {
-            padding: 15px;
-            background: #f9fafb;
-            border-top: 1px solid #eee;
-        }
-
-        .total-row {
-            display: flex;
-            justify-content: space-between;
-            font-size: 13px;
-            margin-bottom: 5px;
-        }
-
-        .total-row.last {
-            font-size: 16px;
-            font-weight: 700;
-            border-top: 1px solid #ddd;
-            padding-top: 8px;
-            margin-top: 8px;
-        }
-
-        .checkout-btn {
-            width: 100%;
-            padding: 12px;
-            background: var(--pos-accent);
-            color: white;
-            border: none;
-            font-weight: 700;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-
-        .pos-tools {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 5px;
-            padding: 10px;
-            border-top: 1px solid #eee;
-        }
-
-        .tool-btn {
-            padding: 8px;
-            background: #f3f4f6;
-            border: none;
-            border-radius: 6px;
-            font-size: 11px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            cursor: pointer;
-        }
-
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 3000;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal-overlay.active {
-            display: flex;
-        }
-
-        .modal-content {
-            background: white;
-            width: 90%;
-            max-width: 400px;
-            padding: 20px;
-            border-radius: 12px;
+        @media(min-width: 993px) {
+            .mobile-cart-toggle { display: none; }
         }
     </style>
 </head>
@@ -451,13 +192,16 @@ if ($lowResult) {
     <?php include 'admin_header.php'; ?>
 
     <div class="pos-container">
+        
         <div class="pos-main">
             <div class="search-section">
                 <div class="search-row">
-                    <div class="search-group"><input type="text" id="searchInput" placeholder="Search product name..." class="search-input"></div>
-                    <div class="search-group" style="display:flex; gap:5px;">
+                    <div class="search-group">
+                        <input type="text" id="searchInput" placeholder="Search product name..." class="search-input">
+                    </div>
+                    <div class="search-group" style="display:flex; gap:10px;">
                         <input type="text" id="barcodeInput" placeholder="Scan barcode..." class="search-input">
-                        <button class="btn-pos" onclick="searchByBarcode()"><i class="fas fa-barcode"></i></button>
+                        <button class="btn btn-primary" onclick="searchByBarcode()" style="padding:12px 20px;"><i class="fas fa-barcode"></i></button>
                     </div>
                 </div>
                 <div class="cat-tabs">
@@ -472,15 +216,15 @@ if ($lowResult) {
             <div class="stats-row">
                 <div class="stat-box">
                     <div class="stat-num"><?= (int)($todaySales['orders'] ?? 0) ?></div>
-                    <div class="stat-label">Orders</div>
+                    <div class="stat-label">Orders Today</div>
                 </div>
                 <div class="stat-box">
-                    <div class="stat-num" style="color: #10b981;">₹<?= number_format($todaySales['revenue'] ?? 0, 0) ?></div>
-                    <div class="stat-label">Revenue</div>
+                    <div class="stat-num" style="color: var(--success);">₹<?= number_format($todaySales['revenue'] ?? 0, 0) ?></div>
+                    <div class="stat-label">Revenue Today</div>
                 </div>
                 <div class="stat-box">
-                    <div class="stat-num" style="color: #f59e0b;"><?= (int)($lowStock['count'] ?? 0) ?></div>
-                    <div class="stat-label">Low Stock</div>
+                    <div class="stat-num" style="color: var(--warning);"><?= (int)($lowStock['count'] ?? 0) ?></div>
+                    <div class="stat-label">Low Stock Items</div>
                 </div>
             </div>
 
@@ -503,11 +247,15 @@ if ($lowResult) {
                         <div>
                             <div class="product-name"><?= e($p['name']) ?></div>
                             <div class="product-price">₹<?= number_format((float)$p['mrp'], 2) ?></div>
-                            <div class="product-stock <?= $stockClass ?>">Stock: <?= $stockQty + 0 ?></div>
+                            <div class="<?= $stockClass ?>"><i class="fas fa-cubes" style="margin-right:4px;"></i> Stock: <?= $stockQty + 0 ?></div>
                         </div>
                         <?php if ($stockQty > 0): ?>
-                            <button class="btn-pos" style="margin-top:8px; width:100%; justify-content:center; font-size:12px;" onclick="addToCart(<?= (int)$p['id'] ?>)">
+                            <button class="btn btn-outline" style="margin-top:12px; width:100%; border-color:var(--border); color:var(--text-main);" onclick="addToCart(<?= (int)$p['id'] ?>)">
                                 <i class="fas fa-plus"></i> Add
+                            </button>
+                        <?php else: ?>
+                             <button class="btn btn-outline" style="margin-top:12px; width:100%; background:#f1f5f9; color:#94a3b8; border-color:#e2e8f0; cursor:not-allowed;" disabled>
+                                Out of Stock
                             </button>
                         <?php endif; ?>
                     </div>
@@ -515,55 +263,94 @@ if ($lowResult) {
             </div>
         </div>
 
+        <button class="mobile-cart-toggle" onclick="toggleMobileCart()">
+            <i class="fas fa-shopping-basket"></i> View Cart (<span id="mobileCartCount">0</span>)
+        </button>
+
         <div class="cart-sidebar" id="cartSidebar">
             <div class="cart-header">
-                <h2 style="margin:0; font-size:16px;">Current Sale</h2>
-                <span id="cartCount" style="font-size:12px; background:#e5e7eb; padding:2px 8px; border-radius:10px;">0 Items</span>
+                <h2 style="margin:0; font-size:1.2rem; font-weight:800; color:var(--text-main);">Current Sale</h2>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span id="cartCount" class="badge" style="background:#e0e7ff; color:var(--primary); font-size:0.8rem; padding:4px 10px;">0 Items</span>
+                    <button class="btn-icon mobile-cart-toggle" style="display:none; width:30px; height:30px;" onclick="toggleMobileCart()"><i class="fas fa-times"></i></button>
+                </div>
             </div>
+            
             <div class="cart-items" id="cartItems"></div>
+            
             <div class="cart-totals">
                 <div class="total-row"><span>Subtotal (Base Value)</span><span id="subtotal">₹0.00</span></div>
-                <div class="total-row"><span style="color:#10b981; font-weight:600;">GST (5% Included)</span><span id="taxAmount" style="color:#10b981; font-weight:600;">₹0.00</span></div>
-                <div class="total-row"><span>Discount</span><input type="number" id="discountInput" style="width:60px; text-align:right;" value="0" oninput="updateCartDisplay()"></div>
+                <div class="total-row"><span style="color:var(--success);">GST (5% Included)</span><span id="taxAmount" style="color:var(--success);">₹0.00</span></div>
+                <div class="total-row" style="align-items:center;">
+                    <span>Discount</span>
+                    <input type="number" id="discountInput" class="form-input" style="width:80px; text-align:right; padding:5px;" value="0" oninput="updateCartDisplay()">
+                </div>
                 <div class="total-row last"><span>Grand Total</span><span id="grandTotal">₹0.00</span></div>
-                <button class="checkout-btn" onclick="openCheckoutModal()">Pay Now <i class="fas fa-arrow-right"></i></button>
+                <button class="checkout-btn" onclick="openCheckoutModal()"><i class="fas fa-credit-card" style="margin-right:8px;"></i> Proceed to Pay</button>
             </div>
+            
             <div class="pos-tools">
-                <button class="tool-btn" onclick="clearCart()"><i class="fas fa-trash"></i> Clear</button>
-                <button class="tool-btn" onclick="holdTransaction()"><i class="fas fa-pause"></i> Hold</button>
-                <button class="tool-btn" onclick="loadHeldTransactions()"><i class="fas fa-history"></i> Recall</button>
-                <button class="tool-btn" onclick="printLastInvoice()"><i class="fas fa-print"></i> Print Last</button>
+                <button class="tool-btn" onclick="clearCart()"><i class="fas fa-trash text-danger"></i> Clear</button>
+                <button class="tool-btn" onclick="holdTransaction()"><i class="fas fa-pause text-warning"></i> Hold</button>
+                <button class="tool-btn" onclick="loadHeldTransactions()"><i class="fas fa-history text-info"></i> Recall</button>
+                <button class="tool-btn" onclick="printLastInvoice()"><i class="fas fa-print text-primary"></i> Print Last</button>
             </div>
         </div>
     </div>
 
-    <div class="modal-overlay" id="checkoutModal">
-        <div class="modal-content">
-            <h3 style="margin-top:0;">Payment Details</h3>
-            <form id="checkoutForm" onsubmit="processPayment(event)">
-                <input type="hidden" id="selectedCustId" value="0">
-                <input type="text" id="custSearch" class="search-input" placeholder="Search Customer..." oninput="suggestCustomer(this.value)" style="margin-bottom:10px;">
-                <div id="custSuggestions" style="display:none; background:#fff; border:1px solid #ddd; max-height:100px; overflow-y:auto; margin-bottom:10px;"></div>
+    <div class="global-modal" id="checkoutModal">
+        <div class="g-modal-content" style="max-width: 450px;">
+            <div class="g-modal-header">
+                <h3 style="margin:0; font-size:1.2rem;"><i class="fas fa-cash-register text-primary" style="margin-right:8px;"></i> Complete Payment</h3>
+                <button class="g-close-btn" type="button" onclick="closeCheckoutModal()">&times;</button>
+            </div>
+            <div class="g-modal-body">
+                <form id="checkoutForm" onsubmit="processPayment(event)">
+                    <input type="hidden" id="selectedCustId" value="0">
+                    
+                    <div class="form-group" style="position:relative;">
+                        <input type="text" id="custSearch" class="form-input" placeholder="Search Registered Customer..." oninput="suggestCustomer(this.value)">
+                        <div id="custSuggestions" style="display:none; position:absolute; top:100%; left:0; width:100%; background:#fff; border:1px solid var(--border); box-shadow:0 4px 6px rgba(0,0,0,0.1); border-radius:6px; max-height:150px; overflow-y:auto; z-index:10;"></div>
+                    </div>
 
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px;">
-                    <input type="text" id="custName" class="search-input" placeholder="Name" required>
-                    <input type="text" id="custPhone" class="search-input" placeholder="Phone">
-                </div>
-                <select id="paymentMethod" class="search-input" style="margin-bottom:10px;">
-                    <option value="Cash">Cash</option>
-                    <option value="UPI">UPI / Online</option>
-                    <option value="Credit">Udhaar (Credit)</option>
-                </select>
-                <input type="number" id="paidAmount" class="search-input" step="0.01" placeholder="Amount Received" required style="margin-bottom:20px;">
-                <button type="submit" class="checkout-btn">Complete & Print</button>
-                <button type="button" class="btn-pos" style="background:#6b7280; width:100%; margin-top:10px; justify-content:center;" onclick="closeCheckoutModal()">Cancel</button>
-            </form>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                        <input type="text" id="custName" class="form-input" placeholder="Walk-in Name" required>
+                        <input type="text" id="custPhone" class="form-input" placeholder="Phone Number">
+                    </div>
+                    
+                    <select id="paymentMethod" class="form-input">
+                        <option value="Cash">Cash Payment</option>
+                        <option value="UPI">UPI / Scanner</option>
+                        <option value="Credit">Udhaar (Credit Ledger)</option>
+                    </select>
+                    
+                    <div style="background:#f0fdf4; padding:15px; border-radius:8px; border:1px solid #bbf7d0; text-align:center; margin-bottom:15px;">
+                        <div style="font-size:0.8rem; font-weight:700; color:#166534; margin-bottom:5px;">AMOUNT TO RECEIVE</div>
+                        <input type="number" id="paidAmount" class="form-input" step="0.01" required style="font-size:1.5rem; font-weight:800; color:var(--success); text-align:center; background:transparent; border:none; padding:0;">
+                    </div>
+                    
+                    <button type="submit" class="checkout-btn" style="margin-top:0;"><i class="fas fa-check-circle"></i> Confirm & Print Bill</button>
+                </form>
+            </div>
         </div>
     </div>
 
     <script>
         let cart = {};
         let lastOrderId = null;
+
+        // Mobile Cart Toggle
+        function toggleMobileCart() {
+            const sidebar = document.getElementById('cartSidebar');
+            sidebar.classList.toggle('open');
+            // Show/Hide close button inside header based on screen size
+            const closeBtn = sidebar.querySelector('.mobile-cart-toggle.btn-icon');
+            if(window.innerWidth <= 992) {
+                closeBtn.style.display = 'block';
+            } else {
+                closeBtn.style.display = 'none';
+            }
+        }
 
         function filterType(type, btn) {
             document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
@@ -576,7 +363,6 @@ if ($lowResult) {
                 if (type === 'all') {
                     card.style.display = 'flex';
                 }
-                // Cake/Khal के लिए विशेष चेकिंग
                 else if (type === 'cake') {
                     if (itemType === 'cake' || itemName.includes('cake') || itemName.includes('khal')) {
                         card.style.display = 'flex';
@@ -599,11 +385,9 @@ if ($lowResult) {
                 grandTotalNoDisc = 0;
 
             for (const [id, item] of Object.entries(cart)) {
-                // Total price including tax
-                const itemTotalInclTax = item.price * item.qty;
-
-                // 5% INCLUSIVE GST FORMULA (Amount / 1.05)
-                const itemBasePrice = itemTotalInclTax / 1.05;
+                const itemTotalInclTax = parseFloat(item.price) * parseInt(item.qty);
+                const gstRate = parseFloat(item.gstrate) || 0;
+                const itemBasePrice = itemTotalInclTax / (1 + (gstRate / 100));
                 const itemTaxAmount = itemTotalInclTax - itemBasePrice;
 
                 subtotalBase += itemBasePrice;
@@ -611,19 +395,36 @@ if ($lowResult) {
                 grandTotalNoDisc += itemTotalInclTax;
 
                 html += `<div class="cart-item">
-                    <div style="flex:1;"><strong>${item.name}</strong><br><small>₹${item.price} x ${item.qty}</small></div>
-                    <div><button class="qty-btn" onclick="updateQty(${id}, -1)">-</button> <span style="display:inline-block; width:20px; text-align:center; font-weight:bold;">${item.qty}</span> <button class="qty-btn" onclick="updateQty(${id}, 1)">+</button></div>
+                    <div style="flex:1;">
+                        <strong>${item.name}</strong><br>
+                        <small style="color:var(--text-muted); font-weight:500;">₹${parseFloat(item.price).toFixed(2)} x ${item.qty} <span style="font-size:10px;">(Inc. ${gstRate}% GST)</span></small>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <button class="qty-btn" onclick="updateQty(${id}, -1)">-</button> 
+                        <span style="display:inline-block; width:20px; text-align:center; font-weight:800; font-size:1rem;">${item.qty}</span> 
+                        <button class="qty-btn" onclick="updateQty(${id}, 1)">+</button>
+                    </div>
                 </div>`;
             }
-            container.innerHTML = html || '<div style="text-align:center;color:#999;padding:20px;"><i class="fas fa-shopping-basket fa-2x" style="margin-bottom:10px; opacity:0.5;"></i><br>Cart is empty</div>';
+
+            if(!html) {
+                html = '<div style="text-align:center;color:#94a3b8;padding:40px 20px;"><i class="fas fa-shopping-basket fa-3x" style="margin-bottom:15px; opacity:0.3;"></i><br><span style="font-weight:500;">Cart is empty</span></div>';
+            }
+            container.innerHTML = html; 
 
             const disc = parseFloat(document.getElementById('discountInput').value) || 0;
-            const grand = grandTotalNoDisc - disc;
+            const finalGrandTotal = grandTotalNoDisc - disc;
 
             document.getElementById('subtotal').textContent = '₹' + subtotalBase.toFixed(2);
             document.getElementById('taxAmount').textContent = '₹' + totalTax.toFixed(2);
-            document.getElementById('grandTotal').textContent = '₹' + grand.toFixed(2);
-            document.getElementById('cartCount').textContent = Object.keys(cart).length + ' Items';
+            document.getElementById('grandTotal').textContent = '₹' + finalGrandTotal.toFixed(2);
+            
+            const countText = Object.keys(cart).length;
+            document.getElementById('cartCount').textContent = countText + ' Items';
+            document.getElementById('mobileCartCount').textContent = countText; // Update mobile button
+
+            const paidInput = document.getElementById('paidAmount');
+            if (paidInput) paidInput.value = finalGrandTotal.toFixed(2);
         }
 
         function addToCart(productId) {
@@ -635,75 +436,14 @@ if ($lowResult) {
                 gstrate = parseFloat(card.dataset.gstrate);
 
             if (cart[productId]) {
-                if (cart[productId].qty >= stock) return alert('Stock limit!');
+                if (cart[productId].qty >= stock) return alert('Stock limit reached!');
                 cart[productId].qty++;
             } else {
                 cart[productId] = {
-                    id: productId,
-                    name: name,
-                    price: price,
-                    qty: 1,
-                    stock: stock,
-                    gstrate: gstrate
+                    id: productId, name: name, price: price, qty: 1, stock: stock, gstrate: gstrate
                 };
             }
             updateCartDisplay();
-        }
-
-        function updateCartDisplay() {
-            const container = document.getElementById('cartItems');
-            let html = '',
-                subtotalBase = 0,
-                totalTax = 0,
-                grandTotalNoDisc = 0;
-
-            for (const [id, item] of Object.entries(cart)) {
-                // 1. Total Price (MRP x Quantity) -> Jaise 105 * 1 = 105
-                const itemTotalInclTax = parseFloat(item.price) * parseInt(item.qty);
-
-                // 2. Product ka GST Rate (Jaise 5%)
-                const gstRate = parseFloat(item.gstrate) || 0;
-
-                // 3. EXACT INCLUSIVE FORMULA: Base = Total / (1 + (GST / 100))
-                // Example: 105 / (1 + 0.05) = 105 / 1.05 = 100
-                const itemBasePrice = itemTotalInclTax / (1 + (gstRate / 100));
-
-                // 4. Tax = Total - Base -> Example: 105 - 100 = 5
-                const itemTaxAmount = itemTotalInclTax - itemBasePrice;
-
-                // Grand totals mein jodna
-                subtotalBase += itemBasePrice;
-                totalTax += itemTaxAmount;
-                grandTotalNoDisc += itemTotalInclTax;
-
-                html += `<div class="cart-item">
-                    <div style="flex:1;">
-                        <strong>${item.name}</strong><br>
-                        <small style="color:#6b7280;">₹${parseFloat(item.price).toFixed(2)} x ${item.qty} <span style="font-size:10px;">(Inc. ${gstRate}% GST)</span></small>
-                    </div>
-                    <div>
-                        <button class="qty-btn" onclick="updateQty(${id}, -1)">-</button> 
-                        <span style="display:inline-block; width:20px; text-align:center; font-weight:bold;">${item.qty}</span> 
-                        <button class="qty-btn" onclick="updateQty(${id}, 1)">+</button>
-                    </div>
-                </div>`;
-            }
-
-            container.innerHTML = html || '<div style="text-align:center;color:#999;padding:20px;"><i class="fas fa-shopping-basket fa-2x" style="margin-bottom:10px; opacity:0.5;"></i><br>Cart is empty</div>';
-
-            // Discount minus karna
-            const disc = parseFloat(document.getElementById('discountInput').value) || 0;
-            const finalGrandTotal = grandTotalNoDisc - disc;
-
-            // Screen par values dikhana (toFixed(2) lagaya hai taaki exact decimals aayein)
-            document.getElementById('subtotal').textContent = '₹' + subtotalBase.toFixed(2);
-            document.getElementById('taxAmount').textContent = '₹' + totalTax.toFixed(2);
-            document.getElementById('grandTotal').textContent = '₹' + finalGrandTotal.toFixed(2);
-            document.getElementById('cartCount').textContent = Object.keys(cart).length + ' Items';
-
-            // Modal mein pay amount auto-fill karna
-            const paidInput = document.getElementById('paidAmount');
-            if (paidInput) paidInput.value = finalGrandTotal.toFixed(2);
         }
 
         function updateQty(id, change) {
@@ -713,7 +453,7 @@ if ($lowResult) {
         }
 
         function openCheckoutModal() {
-            if (Object.keys(cart).length === 0) return alert('Empty cart');
+            if (Object.keys(cart).length === 0) return alert('Cart is empty. Please add products first.');
             document.getElementById('paidAmount').value = document.getElementById('grandTotal').innerText.replace('₹', '');
             document.getElementById('checkoutModal').classList.add('active');
         }
@@ -724,6 +464,12 @@ if ($lowResult) {
 
         function processPayment(e) {
             e.preventDefault();
+            
+            const btn = e.target.querySelector('.checkout-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            btn.disabled = true;
+
             const fd = new FormData();
             fd.append('action', 'save_sale');
             fd.append('customer_id', document.getElementById('selectedCustId').value);
@@ -743,18 +489,27 @@ if ($lowResult) {
                     location.reload();
                 } else {
                     alert("Error: " + res.error);
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
                 }
+            }).catch(err => {
+                alert("Network Error. Please try again.");
+                btn.innerHTML = originalText;
+                btn.disabled = false;
             });
         }
 
         function printLastInvoice() {
             if (lastOrderId) window.open('print_engine.php?doc=pos_invoice&id=' + lastOrderId, 'ThermalPrint', 'width=400,height=600');
-            else alert("No invoice found");
+            else alert("No recent invoice found in this session.");
         }
 
         function clearCart() {
-            cart = {};
-            updateCartDisplay();
+            if(confirm("Are you sure you want to clear the cart?")) {
+                cart = {};
+                document.getElementById('discountInput').value = 0;
+                updateCartDisplay();
+            }
         }
 
         document.getElementById('searchInput').addEventListener('input', (e) => {
@@ -763,7 +518,14 @@ if ($lowResult) {
                 card.style.display = card.dataset.name.toLowerCase().includes(term) ? 'flex' : 'none';
             });
         });
+        
+        // Close modal on outside click
+        window.onclick = function(e) {
+            const modal = document.getElementById('checkoutModal');
+            if (e.target == modal) {
+                closeCheckoutModal();
+            }
+        }
     </script>
 </body>
-
 </html>

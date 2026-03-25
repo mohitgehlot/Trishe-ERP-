@@ -1,5 +1,5 @@
 <?php
-// costing.php - UPDATED with Summary Table
+// costing.php - INTEGRATED WITH MASTER CSS
 include 'config.php';
 session_start();
 
@@ -129,162 +129,118 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
 
 <head>
     <meta charset="UTF-8">
-    <title>Cost Management | Trishe</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cost Management | Trishe Agro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="css/admin_style.css">
+
     <style>
-        :root {
-            --primary: #4f46e5;
-            --bg: #f3f4f6;
-            --white: #ffffff;
-            --border: #e5e7eb;
-            --text: #1f2937;
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            overflow-x: hidden;
         }
 
-        .container {
+        .page-header-box {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .page-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin: 0;
+        }
+
+        .grid-layout {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 20px;
+            gap: 24px;
             margin-bottom: 30px;
-            padding-left: 40px;
+            align-items: start;
         }
 
-        @media(max-width:1000px) {
-            .container {
-                grid-template-columns: 1fr;
-            }
-
-            body {
-                padding-left: 20px;
-            }
-        }
-
-        .card {
-            background: var(--white);
-            border-radius: 12px;
-            padding: 25px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            border: 1px solid var(--border);
-        }
-
-        .form-group {
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
             margin-bottom: 15px;
-        }
-
-        .form-group label {
-            display: block;
-            font-weight: 600;
-            font-size: 0.85rem;
-            margin-bottom: 5px;
-            color: #6b7280;
-        }
-
-        .form-control {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-            box-sizing: border-box;
-            font-size: 0.9rem;
-        }
-
-        .row {
-            display: flex;
-            gap: 10px;
-        }
-
-        .col {
-            flex: 1;
         }
 
         .cost-table {
             width: 100%;
             border-collapse: collapse;
-        }
-
-        .cost-table td {
-            padding: 10px 0;
-            border-bottom: 1px dashed #eee;
             font-size: 0.95rem;
         }
 
-        .val {
+        .cost-table td {
+            padding: 12px 0;
+            border-bottom: 1px dashed var(--border);
+            color: var(--text-main);
+        }
+
+        .cost-table .val {
             text-align: right;
+            font-weight: 700;
             font-family: monospace;
-            font-weight: 600;
-        }
-
-        .btn {
-            width: 100%;
-            padding: 12px;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-
-        .btn:hover {
-            background: #4338ca;
-        }
-
-        /* Summary Table Styles */
-        .summary-card {
-            background: white;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            padding: 20px 0 0 40px;
-            margin-top: 20px;
-        }
-
-        .search-box {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 15px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-        }
-
-        .product-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .product-table th {
-            text-align: left;
-            padding: 12px 10px;
-            background: #f8fafc;
-            border-bottom: 2px solid #e2e8f0;
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            color: #64748b;
-        }
-
-        .product-table td {
-            text-align: left;
-            padding: 12px 10px;
-            border-bottom: 1px solid #f1f5f9;
-            font-size: 0.9rem;
-        }
-
-        .badge {
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: bold;
+            font-size: 1.05rem;
         }
 
         .badge-profit {
-            background: #3a8b56;
-            color: #4dab6a;
+            background: #dcfce7 !important;
+            color: #166534 !important;
+            border: 1px solid #bbf7d0;
         }
 
         .badge-loss {
-            background: #880d0d;
-            color: #991b1b;
+            background: #fee2e2 !important;
+            color: #991b1b !important;
+            border: 1px solid #fca5a5;
+        }
+
+        @media(max-width:1024px) {
+            .grid-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media(max-width: 768px) {
+            body {
+                padding-left: 0;
+            }
+
+            .container {
+                padding: 15px;
+            }
+
+            .page-header-box {
+                flex-direction: column;
+                align-items: stretch;
+                text-align: center;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            /* Stack inputs on small screens */
+            .search-box {
+                width: 100% !important;
+                margin-top: 10px;
+            }
         }
     </style>
 </head>
@@ -293,127 +249,151 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
     <?php include 'admin_header.php'; ?>
 
     <div class="container">
-        <div class="card">
-            <h2 style="font-size:1.2rem; margin-top:0;">1. Live Calculation</h2>
-            <div class="form-group">
-                <label>Select Product</label>
-                <select id="prod_select" class="form-control" onchange="loadProductData()">
-                    <option value="">-- Choose Oil Product --</option>
-                    <?php foreach ($products as $p): ?>
-                        <option value="<?= $p['id'] ?>"><?= $p['name'] ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="row">
-                <div class="col form-group">
-                    <label>Seed Rate (₹/Kg)</label>
-                    <input type="number" id="seed_rate" class="form-control" oninput="calculate()">
-                </div>
-                <div class="col form-group">
-                    <label>Cake Rate (₹/Kg)</label>
-                    <input type="number" id="cake_rate" class="form-control" value="25" oninput="calculate()">
-                </div>
-            </div>
-            <div class="row">
-                <div class="col form-group">
-                    <label>Extraction (%)</label>
-                    <input type="number" id="extraction" class="form-control" oninput="calculate()">
-                    <small id="yield_source"></small>
-                </div>
-                <div class="col form-group">
-                    <label>Processing (₹/Kg)</label>
-                    <input type="number" id="proc_cost" class="form-control" oninput="calculate()">
-                </div>
-            </div>
-            <div class="form-group" style="background:#f0f9ff; padding:10px; border-radius:6px; border:1px solid #bae6fd;">
-                <label>Packaging Cost (Auto from BOM)</label>
-                <input type="text" id="pack_cost_disp" class="form-control" readonly style="background:transparent; border:none; font-weight:bold; color:#0369a1;">
-                <input type="hidden" id="pack_cost">
-            </div>
+
+        <div class="page-header-box">
+            <h1 class="page-title"><i class="fas fa-calculator text-primary" style="margin-right:10px;"></i> Cost & Price Management</h1>
+            <div style="color:var(--text-muted); font-size:0.9rem; font-weight:500;">Calculate dynamic landing cost based on live raw material rates.</div>
         </div>
 
-        <div class="card" style="background:#fafafa;">
-            <h2 style="font-size:1.2rem; margin-top:0;">2. Cost Analysis</h2>
-            <div id="result_area" style="opacity:0.3;">
-                <table class="cost-table">
-                    <tr>
-                        <td>Seed Needed <br><small id="seed_req_txt"></small></td>
-                        <td class="val">₹<span id="res_seed_cost">0.00</span></td>
-                    </tr>
-                    <tr>
-                        <td>Total Processing</td>
-                        <td class="val">₹<span id="res_proc_cost">0.00</span></td>
-                    </tr>
-                    <tr>
-                        <td style="color:#ef4444;">Less: Cake Recovery</td>
-                        <td class="val" style="color:#ef4444;">- ₹<span id="res_cake_val">0.00</span></td>
-                    </tr>
-                    <tr style="font-weight:bold;">
-                        <td>Net Oil Cost</td>
-                        <td class="val">₹<span id="res_net_oil">0.00</span></td>
-                    </tr>
-                    <tr>
-                        <td>Total Packaging</td>
-                        <td class="val">₹<span id="res_pack">0.00</span></td>
-                    </tr>
-                    <tr style="border-top:2px solid #ddd; background:#eef2ff;">
-                        <td style="font-size:1.1rem;"><strong>EST. FINAL COST</strong></td>
-                        <td class="val" style="font-size:1.3rem; color:var(--primary);">₹<span id="res_final">0.00</span></td>
-                    </tr>
-                </table>
-                <div style="margin-top:20px;">
-                    <label style="font-weight:600; font-size:0.85rem;">New Selling Price</label>
-                    <input type="number" id="selling_price" class="form-control" style="font-size:1.2rem; font-weight:bold; color:#16a34a; margin-top:5px;">
-                    <div style="margin-top:10px; display:flex; justify-content:space-between;">
-                        <span>Est. Profit Margin:</span><span id="profit_disp" style="font-weight:bold;">₹0.00 (0%)</span>
+        <div class="grid-layout">
+            <div class="card">
+                <div class="card-header"><i class="fas fa-sliders-h text-warning" style="margin-right:8px;"></i> 1. Live Calculation</div>
+                <div style="padding: 20px;">
+                    <div class="form-group" style="margin-bottom:15px;">
+                        <label class="form-label">Select Product</label>
+                        <select id="prod_select" class="form-input" onchange="loadProductData()">
+                            <option value="">-- Choose Oil Product --</option>
+                            <?php foreach ($products as $p): ?>
+                                <option value="<?= $p['id'] ?>"><?= htmlspecialchars($p['name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
-                    <button class="btn" style="margin-top:15px;" onclick="saveSettings()">Save & Update Price</button>
+
+                    <div class="form-grid">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="form-label">Seed Rate (₹/Kg)</label>
+                            <input type="number" id="seed_rate" class="form-input" oninput="calculate()">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="form-label">Cake Rate (₹/Kg)</label>
+                            <input type="number" id="cake_rate" class="form-input" value="25" oninput="calculate()">
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="form-label">Extraction (%)</label>
+                            <input type="number" id="extraction" class="form-input" oninput="calculate()">
+                            <small id="yield_source" style="display:block; margin-top:5px; font-weight:600;"></small>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="form-label">Processing Cost (₹/Kg)</label>
+                            <input type="number" id="proc_cost" class="form-input" oninput="calculate()">
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="background:#f0f9ff; padding:15px; border-radius:6px; border:1px solid #bae6fd; margin-top:15px;">
+                        <label class="form-label" style="color:#0369a1;">Packaging Cost (Auto from BOM)</label>
+                        <input type="text" id="pack_cost_disp" class="form-input" readonly style="background:transparent; border:none; font-weight:800; color:#0369a1; padding:0; font-size:1.1rem;">
+                        <input type="hidden" id="pack_cost">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="background:#f8fafc;">
+                <div class="card-header" style="background:transparent; border-bottom:1px solid var(--border);"><i class="fas fa-chart-line text-success" style="margin-right:8px;"></i> 2. Cost Analysis</div>
+                <div style="padding: 20px;">
+                    <div id="result_area" style="opacity:0.3; transition:opacity 0.3s;">
+                        <table class="cost-table">
+                            <tr>
+                                <td><span style="font-weight:600;">Seed Needed</span><br><small id="seed_req_txt" style="color:var(--text-muted);"></small></td>
+                                <td class="val">₹<span id="res_seed_cost">0.00</span></td>
+                            </tr>
+                            <tr>
+                                <td><span style="font-weight:600;">Total Processing</span></td>
+                                <td class="val">₹<span id="res_proc_cost">0.00</span></td>
+                            </tr>
+                            <tr>
+                                <td style="color:var(--danger); font-weight:600;">Less: Cake Recovery</td>
+                                <td class="val" style="color:var(--danger);">- ₹<span id="res_cake_val">0.00</span></td>
+                            </tr>
+                            <tr style="font-weight:700;">
+                                <td>Net Oil Cost</td>
+                                <td class="val">₹<span id="res_net_oil">0.00</span></td>
+                            </tr>
+                            <tr>
+                                <td><span style="font-weight:600;">Total Packaging</span></td>
+                                <td class="val">₹<span id="res_pack">0.00</span></td>
+                            </tr>
+                            <tr style="border-top:2px solid var(--border); background:#eef2ff;">
+                                <td style="font-size:1.1rem; padding:15px 10px;"><strong>EST. FINAL COST</strong></td>
+                                <td class="val" style="font-size:1.3rem; color:var(--primary); padding:15px 10px;">₹<span id="res_final">0.00</span></td>
+                            </tr>
+                        </table>
+
+                        <div style="margin-top:25px; border-top:1px dashed var(--border); padding-top:20px;">
+                            <label class="form-label" style="color:var(--text-main);">New Selling Price (MRP)</label>
+                            <input type="number" id="selling_price" class="form-input" style="font-size:1.5rem; font-weight:800; color:var(--success); padding:15px;">
+                            <div style="margin-top:15px; display:flex; justify-content:space-between; align-items:center; background:#fff; padding:10px 15px; border-radius:6px; border:1px solid var(--border);">
+                                <span style="font-weight:600; color:var(--text-muted);">Est. Profit Margin:</span>
+                                <span id="profit_disp" style="font-weight:800; font-size:1.1rem;">₹0.00 (0%)</span>
+                            </div>
+                            <button class="btn btn-primary" style="margin-top:20px; width:100%; padding:14px; font-size:1.1rem;" onclick="saveSettings()">
+                                <i class="fas fa-save" style="margin-right:8px;"></i> Save & Update Price
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <div class="summary-card">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-            <h3 style="margin:0;">Product Costing Summary</h3>
-            <input type="text" id="tableSearch" class="search-box" style="width:250px; margin-bottom:0;" placeholder="Search product name..." onkeyup="searchTable()">
-        </div>
-        <div style="overflow-x:auto;">
-            <table class="product-table" id="summaryTable">
-                <thead>
-                    <tr>
-                        <th>Product Name</th>
-                        <th>Raw Material</th>
-                        <th>Current Cost</th>
-                        <th>Selling Price</th>
-                        <th>Profit/Unit</th>
-                        <th>Margin %</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($products as $p):
-                        $cost = floatval($p['cost_price']);
-                        $sell = floatval($p['base_price']);
-                        $profit = $sell - $cost;
-                        $margin = ($sell > 0) ? ($profit / $sell * 100) : 0;
-                    ?>
+        <div class="card">
+            <div class="card-header" style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+                <div style="display:flex; align-items:center;"><i class="fas fa-list text-info" style="margin-right:8px;"></i> Product Costing Summary</div>
+                <input type="text" id="tableSearch" class="form-input" style="width:250px; padding:8px 12px; margin-bottom:0;" placeholder="Search product name..." onkeyup="searchTable()">
+            </div>
+            <div class="table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+                <table class="table" id="summaryTable">
+                    <thead>
                         <tr>
-                            <td style="font-weight:600;"><?= $p['name'] ?></td>
-                            <td><?= $p['seed_name'] ?: 'N/A' ?></td>
-                            <td class="val">₹<?= number_format($cost, 2) ?></td>
-                            <td class="val">₹<?= number_format($sell, 2) ?></td>
-                            <td class="val" style="color: <?= $profit >= 0 ? '#166534' : '#991b1b' ?>;">
-                                ₹<?= number_format($profit, 2) ?>
-                            </td>
-                            <td>
-                                <span class="badge <?= $margin >= 0 ? 'badge-profit' : 'badge-loss' ?>">
-                                    <?= number_format($margin, 1) ?>%
-                                </span>
-                            </td>
+                            <th>Product Name</th>
+                            <th>Raw Material</th>
+                            <th>Current Cost</th>
+                            <th>Selling Price</th>
+                            <th>Profit/Unit</th>
+                            <th>Margin %</th>
                         </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($products)): ?>
+                            <tr>
+                                <td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted);">No products available.</td>
+                            </tr>
+                        <?php endif; ?>
+                        <?php foreach ($products as $p):
+                            $cost = floatval($p['cost_price']);
+                            $sell = floatval($p['base_price']);
+                            $profit = $sell - $cost;
+                            $margin = ($sell > 0) ? ($profit / $sell * 100) : 0;
+                        ?>
+                            <tr>
+                                <td style="font-weight:700; color:var(--text-main);"><?= htmlspecialchars($p['name']) ?></td>
+                                <td><?= htmlspecialchars($p['seed_name']) ?: '<span style="color:#94a3b8;">N/A</span>' ?></td>
+                                <td style="font-weight:600;">₹<?= number_format($cost, 2) ?></td>
+                                <td style="font-weight:700; color:var(--primary);">₹<?= number_format($sell, 2) ?></td>
+                                <td style="font-weight:700; color: <?= $profit >= 0 ? 'var(--success)' : 'var(--danger)' ?>;">
+                                    <?= $profit >= 0 ? '+' : '' ?>₹<?= number_format($profit, 2) ?>
+                                </td>
+                                <td>
+                                    <span class="badge <?= $margin >= 0 ? 'badge-profit' : 'badge-loss' ?>">
+                                        <?= number_format($margin, 1) ?>%
+                                    </span>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -422,7 +402,10 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
 
         function loadProductData() {
             const pid = document.getElementById('prod_select').value;
-            if (!pid) return;
+            if (!pid) {
+                document.getElementById('result_area').style.opacity = 0.3;
+                return;
+            }
 
             fetch('costing.php', {
                     method: 'POST',
@@ -441,7 +424,11 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
                         document.getElementById('pack_cost').value = res.pack_cost;
                         document.getElementById('pack_cost_disp').value = "₹" + res.pack_cost.toFixed(2);
                         document.getElementById('selling_price').value = res.mrp;
-                        document.getElementById('yield_source').innerText = res.debug_msg;
+
+                        let ySrc = document.getElementById('yield_source');
+                        ySrc.innerText = res.debug_msg;
+                        ySrc.style.color = res.debug_msg.includes('Live') ? 'var(--success)' : 'var(--warning)';
+
                         document.getElementById('result_area').style.opacity = 1;
                         calculate();
                     }
@@ -449,7 +436,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
         }
 
         function calculate() {
-            // FIX: Agar weight 0 hai, toh kam se kam 1 Kg maan kar calculate karega
+            // If weight is 0 in DB, calculate for 1 Unit safely
             let calcWeight = currentOilWeight > 0 ? currentOilWeight : 1;
 
             const seedRate = parseFloat(document.getElementById('seed_rate').value) || 0;
@@ -458,7 +445,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
             const procCostPerKg = parseFloat(document.getElementById('proc_cost').value) || 0;
             const packCost = parseFloat(document.getElementById('pack_cost').value) || 0;
 
-            // Agar extraction 0 ho jaye toh Infinity error na aaye
             if (extraction <= 0) return;
 
             // Calculation formulas
@@ -471,11 +457,9 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
             const netOilCost = (totalSeedCost + totalProcCost) - totalCakeRecovery;
             const finalCost = netOilCost + packCost;
 
-            // HTML Update karna
-            // Warning dikhaye agar weight 0 hai Database me
-            let weightWarning = currentOilWeight <= 0 ? " <span style='color:red;font-size:10px;'>(Weight 0 in DB, Calculated for 1 Unit)</span>" : "";
+            let weightWarning = currentOilWeight <= 0 ? " <span style='color:var(--danger);font-size:11px;display:block;'>(Calculated for 1 Unit - Weight missing in DB)</span>" : "";
 
-            document.getElementById('seed_req_txt').innerHTML = `${seedNeeded.toFixed(2)} Kg Seed` + weightWarning;
+            document.getElementById('seed_req_txt').innerHTML = `${seedNeeded.toFixed(2)} Kg` + weightWarning;
             document.getElementById('res_seed_cost').innerText = totalSeedCost.toFixed(2);
             document.getElementById('res_proc_cost').innerText = totalProcCost.toFixed(2);
             document.getElementById('res_cake_val').innerText = totalCakeRecovery.toFixed(2);
@@ -490,14 +474,19 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
 
             const pEl = document.getElementById('profit_disp');
             pEl.innerText = `₹${profit.toFixed(2)} (${margin.toFixed(1)}%)`;
-            pEl.style.color = profit >= 0 ? '#166534' : '#991b1b';
+            pEl.style.color = profit >= 0 ? 'var(--success)' : 'var(--danger)';
         }
 
         document.getElementById('selling_price').addEventListener('input', calculate);
 
         function saveSettings() {
             const pid = document.getElementById('prod_select').value;
-            if (!pid) return;
+            if (!pid) return alert("Please select a product first.");
+
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            btn.disabled = true;
 
             const fd = new FormData();
             fd.append('action', 'save_costing');
@@ -514,9 +503,17 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
                 .then(r => r.json())
                 .then(res => {
                     if (res.success) {
-                        alert("Costing updated!");
-                        location.reload(); // Table को अपडेट करने के लिए रीलोड
+                        alert("Costing & Price updated successfully!");
+                        location.reload();
+                    } else {
+                        alert("Error: " + res.error);
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
                     }
+                }).catch(err => {
+                    alert("Network Error");
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
                 });
         }
 
@@ -526,8 +523,9 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
             const table = document.getElementById("summaryTable");
             const tr = table.getElementsByTagName("tr");
 
+            // Start from 1 to skip table header
             for (let i = 1; i < tr.length; i++) {
-                let td = tr[i].getElementsByTagName("td")[0];
+                let td = tr[i].getElementsByTagName("td")[0]; // Search only in Product Name column
                 if (td) {
                     let txtValue = td.textContent || td.innerText;
                     tr[i].style.display = txtValue.toLowerCase().indexOf(filter) > -1 ? "" : "none";

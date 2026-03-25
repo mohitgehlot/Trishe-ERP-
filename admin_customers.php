@@ -1,5 +1,5 @@
 <?php
-// admin_customers.php - FIXED SALES DUE LOGIC (IGNORES CASH/UPI)
+// admin_customers.php - FULLY SYNCED WITH MASTER CSS
 include 'config.php';
 session_start();
 
@@ -121,11 +121,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             if ($o_due <= 0) continue; 
 
                             if ($rem_amount >= $o_due) {
-                                // Full clear: update paid_amount to total, and status to Paid
+                                // Full clear
                                 $conn->query("UPDATE orders SET payment_status = 'Paid', paid_amount = total WHERE id = $o_id");
                                 $rem_amount -= $o_due;
                             } else {
-                                // Partial clear: Just add to paid_amount and set status to Partial
+                                // Partial clear
                                 $conn->query("UPDATE orders SET payment_status = 'Partial', paid_amount = paid_amount + $rem_amount WHERE id = $o_id");
                                 $rem_amount = 0;
                             }
@@ -165,7 +165,7 @@ if (isset($_GET['delete'])) {
 }
 
 // ==========================================
-// 3. FETCH DATA (FIXED LIVE DUE CALCULATION)
+// 3. FETCH DATA
 // ==========================================
 $search = $_GET['search'] ?? '';
 $filter_group = $_GET['filter_group'] ?? '';
@@ -249,126 +249,102 @@ $stats = [
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        /* Core Styles */
-        :root { --primary: #059669; --bg: #f8fafc; --card: #fff; --text: #334155; --border: #e2e8f0; }
-        * { box-sizing: border-box; margin:0; padding:0; }
-        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); padding-left: 260px; padding-bottom: 80px; }
-        .container {  margin: 0 auto; padding: 10px; }
-        
-        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #fff; padding: 15px 20px; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
-        .page-title { font-size: 1.2rem; font-weight: 700; color: #0f172a; display:flex; align-items:center; gap:10px; margin:0; }
-        
-        .grid-layout { display: grid; grid-template-columns: 300px 1fr; gap: 20px; }
+    
+    <link rel="stylesheet" href="css/admin_style.css">
 
-        /* Cards & Forms */
-        .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-        .card-head { font-weight: 700; margin-bottom: 15px; color: var(--primary); font-size: 1rem; border-bottom: 1px dashed var(--border); padding-bottom: 10px; display:flex; justify-content:space-between; }
-        .form-group { margin-bottom: 15px; }
-        .form-label { display: block; font-size: 0.8rem; font-weight: 700; margin-bottom: 5px; color: #475569; text-transform: uppercase; }
-        .form-input { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; outline:none; background: #fff; }
-        .btn-primary { background: var(--primary); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.9rem; text-decoration:none; display:inline-block; }
-        .btn-outline { background: white; color: #475569; border: 1px solid #cbd5e1; padding: 10px 15px; border-radius: 6px; text-decoration: none; display:inline-block; font-weight: 600;}
+    <style>
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; overflow-x: hidden; }
+
+        .page-header-box { background: #fff; padding: 20px; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
+        .page-title { font-size: 1.5rem; font-weight: 700; color: var(--text-main); margin: 0; display:flex; align-items:center; gap:10px; }
+
+        .grid-layout { display: grid; grid-template-columns: 320px 1fr; gap: 24px; align-items: start; }
+        aside, main { min-width: 0; width: 100%; }
 
         /* Stats */
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-        .stat-box { background: #f0fdf4; padding: 15px; border-radius: 8px; border: 1px solid #dcfce7; text-align: center; text-decoration: none; display: block; color: inherit; }
-        .stat-box.warning { background: #fff7ed; border-color: #ffedd5; color: #c2410c; grid-column: 1 / -1; }
-        .stat-val { font-size: 1.4rem; font-weight: 800; display: block; margin-bottom:5px; }
-        .stat-lbl { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; opacity:0.8; }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px; }
+        .stat-box { background: #f0fdf4; padding: 20px; border-radius: 8px; border: 1px solid #dcfce7; text-align: center; text-decoration: none; display: flex; flex-direction: column; justify-content: center; color: inherit; transition: 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+        .stat-box:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .stat-box.info { background: #eff6ff; border-color: #dbeafe; color: #1e3a8a; }
+        .stat-box.warning { background: #fff7ed; border-color: #ffedd5; color: #c2410c; grid-column: 1 / -1; padding: 25px; }
+        .stat-val { font-size: 1.6rem; font-weight: 800; margin-bottom: 5px; line-height:1; }
+        .stat-lbl { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; opacity: 0.8; letter-spacing:0.5px; }
 
         /* Filters */
-        .filter-bar { display:flex; gap:10px; margin-bottom:15px; background:#fff; padding:15px; border-radius:8px; border:1px solid var(--border); align-items:flex-end; flex-wrap:wrap; }
-        .filter-item { flex:1; min-width: 140px; }
-
-        /* Table */
-        .table-wrap { overflow-x: auto; background: #fff; border-radius: 8px; border: 1px solid var(--border); }
-        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; min-width: 900px; }
-        th { background: #f8fafc; padding: 12px; text-align: left; font-weight: 600; color: #475569; border-bottom: 1px solid var(--border); }
-        td { padding: 12px; border-bottom: 1px solid var(--border); color: #334155; vertical-align: middle; }
-        tr:hover { background: #f8fafc; }
+        .filter-bar { display:flex; gap:15px; margin-bottom:20px; background:#fff; padding:15px 20px; border-radius:8px; border:1px solid var(--border); align-items:flex-end; flex-wrap:wrap; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+        .filter-item { flex:1; min-width: 150px; }
         
-        .avatar { width: 35px; height: 35px; border-radius: 50%; background: #e0e7ff; color: #4f46e5; display:inline-flex; align-items:center; justify-content:center; font-weight:bold; margin-right:10px; flex-shrink: 0; }
-        .badge { padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }
+        /* Table Customizations */
+        .table-wrap table { min-width: 900px; }
+        .avatar { width: 38px; height: 38px; border-radius: 50%; background: #e0e7ff; color: #4f46e5; display:inline-flex; align-items:center; justify-content:center; font-weight:700; font-size:1.1rem; margin-right:12px; flex-shrink: 0; }
         
-        /* Badges Status Colors */
-        .st-pending, .st-unpaid, .st-due { background: #fff7ed; color: #c2410c; }
-        .st-paid, .st-completed, .st-delivered, .st-cash, .st-upi { background: #f0fdf4; color: #15803d; }
-        .st-processing, .st-shipped { background: #eff6ff; color: #1d4ed8; }
-
-        .tier-bronze { background: #ffedd5; color: #c2410c; }
-        .tier-silver { background: #f1f5f9; color: #475569; }
-        .tier-gold { background: #fef9c3; color: #b45309; }
-        .due-amt { font-weight: 700; color: #ef4444; }
-        .due-amt.clear { color: #059669; }
+        .tier-bronze { background: #ffedd5; color: #c2410c; border: 1px solid #fed7aa; }
+        .tier-silver { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+        .tier-gold { background: #fef9c3; color: #b45309; border: 1px solid #fde047; }
+        .due-amt { font-weight: 800; color: var(--danger); font-size:1.05rem; }
+        .due-amt.clear { color: var(--success); }
 
         /* Actions */
-        .action-btns { display: flex; gap: 5px; flex-wrap: wrap; }
-        .btn-sm { padding: 6px 10px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; border: none; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+        .action-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+        .btn-sm { padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; border: none; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 5px; transition: 0.2s;}
         .btn-khata { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+        .btn-khata:hover { background: #dbeafe; }
         .btn-sale { background: #fdf4ff; color: #be185d; border: 1px solid #fbcfe8; }
+        .btn-sale:hover { background: #fce7f3; }
         .btn-job { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
-        .btn-del { color: #ef4444; background:none; padding:5px; border:none; cursor:pointer;}
+        .btn-job:hover { background: #ffedd5; }
+        .btn-del { color: #ef4444; background: #fee2e2; border: 1px solid #fca5a5; padding: 6px 10px; border-radius: 6px; cursor:pointer; transition: 0.2s;}
+        .btn-del:hover { background: #f87171; color: white;}
 
-        /* TABBED MODAL */
-        .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.active { display: flex; }
-        .modal-content { background: #fff; width: 95%; max-width: 1100px; height: 85vh; border-radius: 12px; display:flex; flex-direction:column; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        /* SPLIT MODAL FOR KHATA */
+        .split-modal-body { display: flex; height: 75vh; overflow: hidden; padding: 0; }
+        .modal-left { width: 65%; padding: 25px; overflow-y: auto; background: #fff; border-right: 1px solid var(--border); }
+        .modal-right { width: 35%; padding: 25px; background: #f8fafc; overflow-y: auto;}
         
-        .modal-header { display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border-bottom: 1px solid var(--border); padding-right:15px;}
-        .modal-tabs { display: flex; overflow-x: auto; }
-        .tab-btn { padding: 15px 25px; font-weight: 700; color: #64748b; background: transparent; border: none; border-bottom: 3px solid transparent; cursor: pointer; white-space: nowrap; font-size:0.95rem; }
+        .modal-tabs { display: flex; overflow-x: auto; background: #f8fafc; padding: 0 10px; flex: 1; }
+        .tab-btn { padding: 15px 25px; font-weight: 700; color: var(--text-muted); background: transparent; border: none; border-bottom: 3px solid transparent; cursor: pointer; white-space: nowrap; font-size:0.95rem; transition: 0.2s; }
+        .tab-btn:hover { color: var(--primary); }
         .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); background: #fff; }
-        
-        .modal-body-container { display: flex; flex: 1; overflow: hidden; }
-        .modal-left { width: 65%; padding: 20px; overflow-y: auto; background: #fff; border-right: 1px solid var(--border); }
-        .modal-right { width: 35%; padding: 20px; background: #f8fafc; overflow-y: auto;}
-
         .tab-content { display: none; }
-        .tab-content.active { display: block; }
-
-        /* Timeline & Table inside Modal */
+        .tab-content.active { display: block; animation: fadeIn 0.3s; }
+        
+        /* Timeline */
         .timeline { list-style: none; padding: 0; margin: 0; }
-        .tl-item { background: #fff; padding: 12px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 10px; display:flex; justify-content:space-between; align-items:center; }
-        .tl-icon { width: 32px; height: 32px; border-radius: 50%; display:flex; align-items:center; justify-content:center; color:white; font-size:0.85rem; margin-right:12px; flex-shrink: 0; }
+        .tl-item { background: #fff; padding: 15px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 12px; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+        .tl-icon { width: 36px; height: 36px; border-radius: 50%; display:flex; align-items:center; justify-content:center; color:white; font-size:1rem; margin-right:15px; flex-shrink: 0; }
         .bg-sale { background: #3b82f6; } .bg-job { background: #f59e0b; } .bg-pay { background: #10b981; }
 
         .history-table { width: 100%; border-collapse: collapse; text-align: left; }
-        .history-table th { padding: 10px; background: #f1f5f9; border-bottom: 1px solid var(--border); font-size: 0.8rem; color: #475569; }
-        .history-table td { padding: 10px; border-bottom: 1px dashed var(--border); font-size: 0.85rem; color: #334155; }
+        .history-table th { padding: 12px; background: #f1f5f9; border-bottom: 1px solid var(--border); font-size: 0.8rem; color: #475569; text-transform:uppercase;}
+        .history-table td { padding: 12px; border-bottom: 1px dashed var(--border); font-size: 0.9rem; color: #334155; }
 
-        .alert { padding: 12px; border-radius: 6px; margin-bottom: 15px; font-weight:500; font-size:0.9rem; }
-        .alert-success { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
-        .alert-danger { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
-
-        /* Mobile Adjustments */
+        /* MOBILE RESPONSIVE (Table to Cards Fix) */
         @media (max-width: 1024px) {
-            body { padding-left: 0; }
             .grid-layout { grid-template-columns: 1fr; }
             aside { order: 1; } main { order: 2; }
-            .modal-body-container { flex-direction: column; }
-            .modal-left, .modal-right { width: 100%; border-right:none; height: auto; }
+            .split-modal-body { flex-direction: column; height: 80vh; overflow-y: auto; }
+            .modal-left, .modal-right { width: 100%; border-right: none; height: auto; overflow: visible; }
             .modal-right { border-top: 1px solid var(--border); }
         }
 
         @media (max-width: 768px) {
-            .container { padding: 10px; }
-            .page-header { flex-direction: column; align-items: flex-start; gap: 10px; }
-            .stats-grid { grid-template-columns: 1fr 1fr; }
-            .filter-bar { flex-direction: column; align-items: stretch; }
+            .container { padding: 12px; }
+            .page-header-box { flex-direction: column; align-items: flex-start; gap: 10px; }
+            .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+            .stat-box { padding: 15px 10px; }
+            .stat-val { font-size: 1.3rem; }
+            .filter-bar { flex-direction: column; align-items: stretch; padding: 15px; }
             .filter-bar button, .filter-bar a { width: 100%; text-align: center; margin-top:5px; }
 
-            /* Table to Cards */
-            table { min-width: 100%; border: none; background: transparent; }
-            thead { display: none; }
-            .table-wrap { border: none; background: transparent; overflow: visible; }
-            
-            tr { display: flex; flex-direction: column; background: #fff; margin-bottom: 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid var(--border); padding: 5px; }
-            td { display: flex; justify-content: space-between; align-items: center; padding: 10px 10px; border-bottom: 1px dashed var(--border); text-align: right; }
-            td:last-child { border-bottom: none; display: block; padding-top: 15px;}
-            
-            td::before { content: attr(data-label); font-weight: 700; color: #64748b; font-size: 0.75rem; text-transform: uppercase; text-align: left; margin-right: 15px; }
-            td:last-child::before { display: none; }
+            /* Table to Cards for Customer List */
+            .table-wrap { border: none; background: transparent; overflow: visible; box-shadow: none; }
+            .table-wrap table { min-width: 100% !important; }
+            .table-wrap thead { display: none; }
+            .table-wrap tr { display: flex; flex-direction: column; background: #fff; margin-bottom: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid var(--border); padding: 10px; }
+            .table-wrap td { display: flex; justify-content: space-between; align-items: center; padding: 10px 5px !important; border-bottom: 1px dashed var(--border) !important; text-align: right; font-size: 0.9rem; }
+            .table-wrap td:last-child { border-bottom: none !important; display: block; padding-top: 15px !important; }
+            .table-wrap td::before { content: attr(data-label); font-weight: 700; color: #64748b; font-size: 0.75rem; text-transform: uppercase; text-align: left; margin-right: 15px; }
+            .table-wrap td:last-child::before { display: none; }
             
             .td-cust-info { flex-direction: row; justify-content: flex-end; }
             .td-cust-info > div { text-align: right !important; }
@@ -388,29 +364,30 @@ $stats = [
 <div class="container">
     
     <?php if(isset($_GET['msg'])): ?>
-        <div class="alert alert-success">
+        <div class="alert">
+            <i class="fas fa-check-circle"></i>
             <?php 
-                if($_GET['msg']=='CustomerAdded') echo "✅ Customer added successfully!";
-                elseif($_GET['msg']=='PaymentUpdated') echo "✅ Payment received and pending sales/jobs updated!";
-                elseif($_GET['msg']=='Deleted') echo "✅ Customer deleted!";
-                elseif($_GET['msg']=='BulkDeleted') echo "✅ Selected customers deleted!";
+                if($_GET['msg']=='CustomerAdded') echo "Customer added successfully!";
+                elseif($_GET['msg']=='PaymentUpdated') echo "Payment received and pending sales/jobs updated!";
+                elseif($_GET['msg']=='Deleted') echo "Customer deleted!";
+                elseif($_GET['msg']=='BulkDeleted') echo "Selected customers deleted!";
             ?>
         </div>
     <?php endif; ?>
     <?php foreach($errors as $e): ?>
-        <div class="alert alert-danger"><?= $e ?></div>
+        <div class="alert" style="background:#fee2e2; color:#b91c1c; border-color:#fca5a5;"><i class="fas fa-exclamation-triangle"></i> <?= $e ?></div>
     <?php endforeach; ?>
 
-    <div class="page-header">
+    <div class="page-header-box">
         <h1 class="page-title"><i class="fas fa-address-book text-primary"></i> Customer Directory</h1>
-        <div style="font-size:0.85rem; color:#64748b;">Manage contacts, dues, and view history.</div>
+        <div style="font-size:0.9rem; color:var(--text-muted); font-weight:500;">Manage contacts, dues, and view history.</div>
     </div>
 
     <div class="grid-layout">
         
         <aside>
             <div class="stats-grid">
-                <a href="admin_customers.php" class="stat-box">
+                <a href="admin_customers.php" class="stat-box" style="color:var(--success);">
                     <span class="stat-val"><?= $stats['total_customers'] ?></span>
                     <span class="stat-lbl">Customers</span>
                 </a>
@@ -420,35 +397,37 @@ $stats = [
                 </div>
                 <a href="admin_customers.php?due_only=1&sort_by=due_desc" class="stat-box warning">
                     <span class="stat-val">₹ <?= number_format($stats['market_due'], 0) ?></span>
-                    <span class="stat-lbl">Total Market Due <i class="fas fa-link"></i></span>
+                    <span class="stat-lbl">Total Market Due <i class="fas fa-external-link-alt" style="margin-left:5px; font-size:0.7rem;"></i></span>
                 </a>
             </div>
 
             <div class="card">
-                <div class="card-head"><span>Add Customer</span> <i class="fas fa-user-plus"></i></div>
-                <form method="POST">
-                    <div class="form-group">
-                        <label class="form-label">Full Name *</label>
-                        <input type="text" name="name" class="form-input" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Phone (10 Digits) *</label>
-                        <input type="tel" name="phone" class="form-input" pattern="[0-9]{10}" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Email (Optional)</label>
-                        <input type="email" name="email" class="form-input">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Address</label>
-                        <input type="text" name="address" class="form-input">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Opening Due (पुराना उधार ₹)</label>
-                        <input type="number" step="0.01" name="opening_due" class="form-input" value="0">
-                    </div>
-                    <button type="submit" name="add_customer" class="btn btn-primary" style="width:100%;"><i class="fas fa-save"></i> Save Contact</button>
-                </form>
+                <div class="card-header"><i class="fas fa-user-plus text-primary" style="margin-right:8px;"></i> Add Customer</div>
+                <div style="padding:20px;">
+                    <form method="POST">
+                        <div class="form-group">
+                            <label class="form-label">Full Name *</label>
+                            <input type="text" name="name" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Phone (10 Digits) *</label>
+                            <input type="tel" name="phone" class="form-input" pattern="[0-9]{10}" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Email (Optional)</label>
+                            <input type="email" name="email" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Address</label>
+                            <input type="text" name="address" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Opening Due (पुराना उधार ₹)</label>
+                            <input type="number" step="0.01" name="opening_due" class="form-input" value="0">
+                        </div>
+                        <button type="submit" name="add_customer" class="btn btn-primary" style="width:100%; margin-top:10px;"><i class="fas fa-save"></i> Save Contact</button>
+                    </form>
+                </div>
             </div>
         </aside>
 
@@ -459,7 +438,7 @@ $stats = [
                     <input type="text" name="search" class="form-input" placeholder="Type here..." value="<?= htmlspecialchars($search) ?>">
                 </div>
                 <div class="filter-item" style="min-width: 120px;">
-                    <label class="form-label">Filter</label>
+                    <label class="form-label">Filter Status</label>
                     <select name="due_only" class="form-input">
                         <option value="0">All Customers</option>
                         <option value="1" <?= $due_only=='1'?'selected':'' ?>>Has Due (उधार)</option>
@@ -483,12 +462,12 @@ $stats = [
             </form>
 
             <form method="POST">
-                <div style="display:flex; gap:10px; margin-bottom:10px; align-items:center;">
-                    <select name="bulk_action" class="form-input" style="width:auto; min-width:150px; padding:8px;">
+                <div style="display:flex; gap:10px; margin-bottom:15px; align-items:center;">
+                    <select name="bulk_action" class="form-input" style="width:auto; min-width:150px; padding:8px 12px;">
                         <option value="">Bulk Action</option>
                         <option value="delete">Delete Selected</option>
                     </select>
-                    <button type="submit" class="btn btn-outline" style="padding:8px 15px;" onclick="return confirm('Apply bulk action?')">Apply</button>
+                    <button type="submit" class="btn btn-outline" style="padding:8px 15px;" onclick="return confirm('Apply bulk action to selected customers?')">Apply</button>
                 </div>
 
                 <div class="table-wrap">
@@ -512,40 +491,40 @@ $stats = [
                                     <div style="display:flex; align-items:center;">
                                         <div class="avatar"><?= strtoupper(substr($row['name'],0,1)) ?></div>
                                         <div style="text-align:left;">
-                                            <strong style="color:#0f172a; font-size:0.95rem;"><?= htmlspecialchars($row['name']) ?></strong><br>
-                                            <span style="color:#64748b; font-size:0.8rem;"><i class="fas fa-phone fa-sm"></i> <?= htmlspecialchars($row['phone']) ?></span>
+                                            <strong style="color:var(--text-main); font-size:1rem;"><?= htmlspecialchars($row['name']) ?></strong><br>
+                                            <span style="color:var(--text-muted); font-size:0.85rem; font-weight:500;"><i class="fas fa-phone fa-sm"></i> <?= htmlspecialchars($row['phone']) ?></span>
                                         </div>
                                     </div>
                                 </td>
                                 
                                 <td data-label="Loyalty / Group">
                                     <?php if($row['group_name']): ?>
-                                        <div style="font-size:0.8rem; font-weight:600; color:#3b82f6; margin-bottom:3px;"><?= $row['group_name'] ?></div>
+                                        <div style="font-size:0.85rem; font-weight:700; color:var(--primary); margin-bottom:5px;"><?= $row['group_name'] ?></div>
                                     <?php endif; ?>
                                     <?php if($row['loyalty_tier']): ?>
                                         <span class="badge tier-<?= strtolower($row['loyalty_tier']) ?>">
                                             <i class="fas fa-star"></i> <?= $row['loyalty_tier'] ?> (<?= $row['loyalty_points'] ?>)
                                         </span>
                                     <?php else: ?>
-                                        <span style="color:#94a3b8; font-size:0.8rem;">-</span>
+                                        <span style="color:var(--text-muted); font-size:0.8rem;">-</span>
                                     <?php endif; ?>
                                 </td>
                                 
                                 <td data-label="Orders / Spent">
-                                    <div style="font-size:0.8rem; color:#475569; margin-bottom:3px;">
+                                    <div style="font-size:0.85rem; color:var(--text-muted); font-weight:500; margin-bottom:5px;">
                                         Sales: <strong><?= $row['total_orders'] ?></strong> | Jobs: <strong><?= $row['total_jobs'] ?></strong>
                                     </div>
-                                    <div style="color:var(--primary); font-weight:700;">₹<?= number_format($row['total_spent'], 0) ?></div>
+                                    <div style="color:var(--primary); font-weight:800; font-size:1.05rem;">₹<?= number_format($row['total_spent'], 0) ?></div>
                                 </td>
                                 
                                 <td data-label="Tins / Due">
-                                    <div style="font-size:0.8rem; color:#475569; margin-bottom:3px;"><i class="fas fa-database"></i> Tins: <strong><?= $row['empty_tins'] ?></strong></div>
+                                    <div style="font-size:0.85rem; color:var(--text-muted); font-weight:600; margin-bottom:5px;"><i class="fas fa-database"></i> Tins: <strong><?= $row['empty_tins'] ?></strong></div>
                                     <div class="due-amt <?= $row['actual_due']<=0 ? 'clear':'' ?>">Due: ₹<?= number_format($row['actual_due'], 2) ?></div>
                                 </td>
                                 
                                 <td data-label="Actions">
                                     <div class="action-btns">
-                                        <a href="?delete=<?= $row['id'] ?>" class="btn-del" onclick="return confirm('Delete this customer?');"><i class="fas fa-trash"></i></a>
+                                        <a href="?delete=<?= $row['id'] ?>" class="btn-del" onclick="return confirm('Delete this customer?');" title="Delete Customer"><i class="fas fa-trash"></i></a>
                                         
                                         <button type="button" class="btn-sm btn-khata" onclick="openHistory(<?= $row['id'] ?>, '<?= addslashes(htmlspecialchars($row['name'])) ?>', <?= $row['actual_due'] ?>, <?= $row['empty_tins'] ?>, 'ledger')">
                                             <i class="fas fa-book-open"></i> Khata
@@ -560,7 +539,7 @@ $stats = [
                                 </td>
                             </tr>
                             <?php endforeach; else: ?>
-                                <tr><td colspan="6" style="text-align:center; padding:30px; color:#94a3b8;">No customers found.</td></tr>
+                                <tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text-muted); font-size:1.1rem;">No customers found.</td></tr>
                             <?php endif; ?>
                         </tbody>
                     </table>
@@ -570,56 +549,63 @@ $stats = [
     </div>
 </div>
 
-<div class="modal" id="historyModal">
-    <div class="modal-content">
-        <div class="modal-header">
+<div class="global-modal" id="historyModal">
+    <div class="g-modal-content" style="max-width: 1100px; padding:0; overflow:hidden; border-radius:12px;">
+        
+        <div class="g-modal-header" style="padding:0;">
             <div class="modal-tabs">
-                <button class="tab-btn active" id="tab-ledger" onclick="switchTab('ledger')"><i class="fas fa-book-open"></i> Khata</button>
-                <button class="tab-btn" id="tab-sales" onclick="switchTab('sales')"><i class="fas fa-shopping-cart"></i> Sales History</button>
-                <button class="tab-btn" id="tab-jobs" onclick="switchTab('jobs')"><i class="fas fa-cogs"></i> Job Works</button>
+                <button class="tab-btn active" id="tab-ledger" onclick="switchTab('ledger')"><i class="fas fa-book-open" style="margin-right:5px;"></i> Khata Ledger</button>
+                <button class="tab-btn" id="tab-sales" onclick="switchTab('sales')"><i class="fas fa-shopping-cart" style="margin-right:5px;"></i> Sales History</button>
+                <button class="tab-btn" id="tab-jobs" onclick="switchTab('jobs')"><i class="fas fa-cogs" style="margin-right:5px;"></i> Job Works</button>
             </div>
-            <div>
-                <button type="button" onclick="closeHistory()" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:#64748b;">&times;</button>
+            <div style="padding-right: 20px;">
+                <button type="button" class="g-close-btn" onclick="closeHistory()">&times;</button>
             </div>
         </div>
 
-        <div class="modal-body-container">
+        <div class="split-modal-body">
             <div class="modal-left">
-                <h3 id="modal-cust-name" style="margin-top:0; color:var(--primary); font-size:1.2rem; margin-bottom:15px;">Customer Name</h3>
+                <h3 id="modal-cust-name" style="margin-top:0; color:var(--primary); font-size:1.3rem; font-weight:800; margin-bottom:20px; display:flex; align-items:center; gap:10px;"><i class="fas fa-user-circle"></i> Customer Name</h3>
                 
                 <div id="content-ledger" class="tab-content active">
-                    <ul class="timeline" id="timelineList"><li style="text-align:center; padding:20px; color:#94a3b8;">Loading ledger...</li></ul>
+                    <ul class="timeline" id="timelineList">
+                        <li style="text-align:center; padding:40px; color:var(--text-muted);"><i class="fas fa-spinner fa-spin fa-2x"></i><br>Loading ledger...</li>
+                    </ul>
                 </div>
                 
                 <div id="content-sales" class="tab-content">
                     <div style="display:flex; justify-content:space-between; margin-bottom:15px; align-items:center;">
-                        <h4 style="margin:0; color:#334155;">Past Sales</h4>
-                        <a id="btn-new-sale" href="#" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> New Sale</a>
+                        <h4 style="margin:0; color:var(--text-main); font-size:1.1rem;">Past Sales</h4>
+                        <a id="btn-new-sale" href="#" class="btn btn-primary" style="padding:8px 15px;"><i class="fas fa-plus"></i> New Sale</a>
                     </div>
-                    <div id="salesList" class="table-responsive"><div style="text-align:center; padding:20px; color:#94a3b8;">Loading sales...</div></div>
+                    <div id="salesList" class="table-wrap" style="box-shadow:none;">
+                        <div style="text-align:center; padding:40px; color:var(--text-muted);"><i class="fas fa-spinner fa-spin fa-2x"></i><br>Loading sales...</div>
+                    </div>
                 </div>
                 
                 <div id="content-jobs" class="tab-content">
                     <div style="display:flex; justify-content:space-between; margin-bottom:15px; align-items:center;">
-                        <h4 style="margin:0; color:#334155;">Past Job Works</h4>
-                        <a id="btn-new-job" href="#" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> New Job</a>
+                        <h4 style="margin:0; color:var(--text-main); font-size:1.1rem;">Past Job Works</h4>
+                        <a id="btn-new-job" href="#" class="btn btn-primary" style="padding:8px 15px;"><i class="fas fa-plus"></i> New Job</a>
                     </div>
-                    <div id="jobsList" class="table-responsive"><div style="text-align:center; padding:20px; color:#94a3b8;">Loading jobs...</div></div>
+                    <div id="jobsList" class="table-wrap" style="box-shadow:none;">
+                        <div style="text-align:center; padding:40px; color:var(--text-muted);"><i class="fas fa-spinner fa-spin fa-2x"></i><br>Loading jobs...</div>
+                    </div>
                 </div>
             </div>
             
             <div class="modal-right">
-                <div style="background:#fff7ed; padding:15px; border-radius:8px; border:1px solid #ffedd5; margin-bottom:20px; text-align:center;">
-                    <span style="font-size:0.8rem; color:#c2410c; font-weight:700;">CURRENT DUE</span>
-                    <div id="k_due" style="font-size:2rem; font-weight:800; color:#9a3412;">₹0.00</div>
+                <div style="background:#fff7ed; padding:20px; border-radius:8px; border:1px solid #ffedd5; margin-bottom:25px; text-align:center; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+                    <span style="font-size:0.85rem; color:#c2410c; font-weight:800; letter-spacing:1px;">CURRENT DUE BALANCE</span>
+                    <div id="k_due" style="font-size:2.5rem; font-weight:800; color:#9a3412; margin-top:5px;">₹0.00</div>
                 </div>
 
-                <h4 style="font-size:1rem; margin-bottom:15px; color:#0f172a;"><i class="fas fa-hand-holding-usd"></i> Receive Payment</h4>
+                <h4 style="font-size:1.1rem; margin-bottom:20px; color:var(--text-main); font-weight:700;"><i class="fas fa-hand-holding-usd text-success" style="margin-right:8px;"></i> Receive Payment</h4>
                 <form method="POST">
                     <input type="hidden" name="customer_id" id="k_id">
                     <div class="form-group">
                         <label class="form-label">Amount Received (₹)</label>
-                        <input type="number" name="amount" step="0.01" id="k_pay_amount" class="form-input" placeholder="0.00" value="0" required>
+                        <input type="number" name="amount" step="0.01" id="k_pay_amount" class="form-input" placeholder="0.00" value="0" required style="font-size:1.2rem; font-weight:700; color:var(--success);">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Payment Mode</label>
@@ -634,11 +620,11 @@ $stats = [
                         <label class="form-label">Empty Tins in Mill 🛢️</label>
                         <input type="number" name="empty_tins" id="k_tins" class="form-input" placeholder="0" required>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" style="margin-bottom:25px;">
                         <label class="form-label">Note / Remark</label>
                         <input type="text" name="note" class="form-input" placeholder="e.g. Paid by brother">
                     </div>
-                    <button type="submit" name="receive_payment" class="btn-primary" style="width:100%; margin-top:10px;"><i class="fas fa-save"></i> Save Payment & Clear Bills</button>
+                    <button type="submit" name="receive_payment" class="btn btn-primary" style="width:100%; padding:14px; font-size:1.1rem;"><i class="fas fa-check-circle"></i> Save Payment & Clear Bills</button>
                 </form>
             </div>
         </div>
@@ -646,10 +632,12 @@ $stats = [
 </div>
 
 <script>
+    // Remove URL parameters after loading
     if(window.history.replaceState) {
         const url = new URL(window.location); url.searchParams.delete('msg'); window.history.replaceState(null, '', url);
     }
 
+    // Select All Checkbox
     document.getElementById('selectAll').addEventListener('change', function(e) {
         document.querySelectorAll('.cb-cust').forEach(cb => cb.checked = e.target.checked);
     });
@@ -662,7 +650,7 @@ $stats = [
         currentCustId = id;
         document.getElementById('k_id').value = id;
         document.getElementById('modal-cust-name').innerHTML = `<i class="fas fa-user-circle"></i> ${name}`;
-        document.getElementById('k_due').innerText = '₹ ' + parseFloat(due).toFixed(2);
+        document.getElementById('k_due').innerText = '₹ ' + parseFloat(due).toLocaleString('en-IN', {minimumFractionDigits: 2});
         document.getElementById('k_pay_amount').value = parseFloat(due).toFixed(2);
         document.getElementById('k_tins').value = tins;
         
@@ -674,7 +662,11 @@ $stats = [
     }
     
     function closeHistory() { modal.classList.remove('active'); }
+    
+    // Close modal on outside click
     modal.addEventListener('click', function(e) { if(e.target === this) closeHistory(); });
+    // Close modal on Escape key
+    document.addEventListener('keydown', function(e) { if(e.key === "Escape") closeHistory(); });
 
     function switchTab(tab) {
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -691,11 +683,11 @@ $stats = [
     // --- AJAX FETCHERS ---
     function fetchLedger(id) {
         const list = document.getElementById('timelineList');
-        list.innerHTML = '<li style="text-align:center; padding:20px; color:#94a3b8;">Loading...</li>';
+        list.innerHTML = '<li style="text-align:center; padding:40px; color:var(--text-muted);"><i class="fas fa-spinner fa-spin fa-2x"></i></li>';
         
         fetch(`admin_customers.php?action=get_ledger&customer_id=${id}`)
         .then(res => res.json()).then(data => {
-            if(data.length === 0) { list.innerHTML = '<li style="text-align:center; padding:20px; color:#94a3b8;">No transaction history found.</li>'; return; }
+            if(data.length === 0) { list.innerHTML = '<li style="text-align:center; padding:30px; color:var(--text-muted); font-weight:500;">No transaction history found.</li>'; return; }
             
             let html = '';
             data.forEach(item => {
@@ -703,45 +695,44 @@ $stats = [
                 let d = new Date(item.date);
                 let dateStr = d.toLocaleDateString('en-GB', {day:'2-digit', month:'short'}) + ', ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
                 
-                // Set Badge by method instead of status for sales to be accurate
                 let p_stat = item.status ? item.status.toLowerCase() : 'pending';
 
                 if(item.type === 'sale') { 
                     icon = 'shopping-cart'; bgClass = 'bg-sale'; title = 'Sale #'+item.ref; 
-                    if(['cash','upi','card','bank'].includes(p_stat)) { amtColor = '#059669'; sign = 'Paid (Sale)'; }
-                    else { amtColor = '#dc2626'; sign = 'Due +'; }
+                    if(['cash','upi','card','bank','online'].includes(p_stat)) { amtColor = 'var(--success)'; sign = 'Paid (Sale)'; }
+                    else { amtColor = 'var(--danger)'; sign = 'Due +'; }
                 } 
                 else if(item.type === 'service') { 
                     icon = 'cogs'; bgClass = 'bg-job'; title = 'Job Work #'+item.ref; 
-                    if(p_stat === 'paid') { amtColor = '#059669'; sign = 'Paid (Job)'; }
-                    else { amtColor = '#dc2626'; sign = 'Due +'; }
+                    if(p_stat === 'paid') { amtColor = 'var(--success)'; sign = 'Paid (Job)'; }
+                    else { amtColor = 'var(--danger)'; sign = 'Due +'; }
                 } 
                 else { 
-                    icon = 'rupee-sign'; bgClass = 'bg-pay'; title = 'Payment Received ('+item.status+')'; amtColor = '#059669'; sign = 'Paid -'; 
+                    icon = 'rupee-sign'; bgClass = 'bg-pay'; title = 'Payment Received ('+item.status+')'; amtColor = 'var(--success)'; sign = 'Paid -'; 
                 }
 
                 html += `<li class="tl-item">
                     <div style="display:flex; align-items:center;">
                         <div class="tl-icon ${bgClass}"><i class="fas fa-${icon}"></i></div>
-                        <div><strong style="font-size:0.85rem; color:#1e293b;">${title}</strong><br><small style="color:#64748b;">${dateStr}</small></div>
+                        <div><strong style="font-size:0.95rem; color:var(--text-main);">${title}</strong><br><small style="color:var(--text-muted); font-weight:500;">${dateStr}</small></div>
                     </div>
                     <div style="text-align:right;">
-                        <small style="color:#94a3b8; font-size:0.7rem; display:block;">${sign}</small>
-                        <strong style="color:${amtColor}; font-size:0.95rem;">₹${parseFloat(item.amount).toFixed(2)}</strong>
+                        <small style="color:var(--text-muted); font-size:0.75rem; font-weight:600; display:block;">${sign}</small>
+                        <strong style="color:${amtColor}; font-size:1.1rem;">₹${parseFloat(item.amount).toLocaleString('en-IN', {minimumFractionDigits: 2})}</strong>
                     </div>
                 </li>`;
             });
             list.innerHTML = html;
-        });
+        }).catch(err => list.innerHTML = '<li style="text-align:center; padding:20px; color:red;">Failed to load.</li>');
     }
 
     function fetchSales(id) {
         const list = document.getElementById('salesList');
-        list.innerHTML = '<div style="text-align:center; padding:20px; color:#94a3b8;">Loading...</div>';
+        list.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
         
         fetch(`admin_customers.php?action=get_sales&customer_id=${id}`)
         .then(res => res.json()).then(data => {
-            if(data.length === 0) { list.innerHTML = '<div style="text-align:center; padding:20px; color:#94a3b8;">No past sales found.</div>'; return; }
+            if(data.length === 0) { list.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted); font-weight:500;">No past sales found.</div>'; return; }
             
             let html = '<table class="history-table"><thead><tr><th>Order No</th><th>Date</th><th>Amount</th><th>Method</th><th>Pay Status</th></tr></thead><tbody>';
             data.forEach(s => {
@@ -749,46 +740,45 @@ $stats = [
                 let p_meth = s.payment_method ? s.payment_method.toLowerCase() : 'due';
                 let p_stat = s.payment_status ? s.payment_status.toLowerCase() : 'pending';
                 
-                // Display override if method is cash/upi it means it's paid
                 if(['cash','upi','card','bank','online'].includes(p_meth)) { p_stat = 'paid'; }
 
                 html += `<tr>
-                    <td><strong>#${s.order_no}</strong></td>
-                    <td>${d}</td>
-                    <td>₹${parseFloat(s.total).toFixed(2)}</td>
-                    <td><span class="badge st-${p_meth}">${s.payment_method || 'Due'}</span></td>
-                    <td><span class="badge st-${p_stat}">${p_stat === 'paid' ? 'Paid' : (s.payment_status || 'Pending')}</span></td>
+                    <td><strong style="color:var(--primary);">#${s.order_no}</strong></td>
+                    <td style="font-weight:500;">${d}</td>
+                    <td style="font-weight:700;">₹${parseFloat(s.total).toFixed(2)}</td>
+                    <td><span class="badge st-${p_meth}" style="padding:4px 8px;">${s.payment_method || 'Due'}</span></td>
+                    <td><span class="badge st-${p_stat}" style="padding:4px 8px;">${p_stat === 'paid' ? 'Paid' : (s.payment_status || 'Pending')}</span></td>
                 </tr>`;
             });
             html += '</tbody></table>';
             list.innerHTML = html;
-        });
+        }).catch(err => list.innerHTML = '<div style="text-align:center; color:red; padding:20px;">Failed to load.</div>');
     }
 
     function fetchJobs(id) {
         const list = document.getElementById('jobsList');
-        list.innerHTML = '<div style="text-align:center; padding:20px; color:#94a3b8;">Loading...</div>';
+        list.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);"><i class="fas fa-spinner fa-spin fa-2x"></i></div>';
         
         fetch(`admin_customers.php?action=get_jobs&customer_id=${id}`)
         .then(res => res.json()).then(data => {
-            if(data.length === 0) { list.innerHTML = '<div style="text-align:center; padding:20px; color:#94a3b8;">No past jobs found.</div>'; return; }
+            if(data.length === 0) { list.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted); font-weight:500;">No past jobs found.</div>'; return; }
             
             let html = '<table class="history-table"><thead><tr><th>Job ID</th><th>Date</th><th>Item</th><th>Weight</th><th>Total</th><th>Status</th></tr></thead><tbody>';
             data.forEach(s => {
                 let d = new Date(s.service_date).toLocaleDateString('en-GB');
                 let p_stat = s.payment_status ? s.payment_status.toLowerCase() : 'pending';
                 html += `<tr>
-                    <td><strong>#${s.id}</strong></td>
-                    <td>${d}</td>
-                    <td>${s.seed_type}</td>
-                    <td>${s.weight_kg}kg</td>
-                    <td>₹${parseFloat(s.total_amount).toFixed(2)}</td>
-                    <td><span class="badge st-${p_stat}">${s.payment_status || 'Pending'}</span></td>
+                    <td><strong style="color:var(--warning);">#${s.id}</strong></td>
+                    <td style="font-weight:500;">${d}</td>
+                    <td style="font-weight:600;">${s.seed_type}</td>
+                    <td style="font-weight:600;">${s.weight_kg} kg</td>
+                    <td style="font-weight:700;">₹${parseFloat(s.total_amount).toFixed(2)}</td>
+                    <td><span class="badge st-${p_stat}" style="padding:4px 8px;">${s.payment_status || 'Pending'}</span></td>
                 </tr>`;
             });
             html += '</tbody></table>';
             list.innerHTML = html;
-        });
+        }).catch(err => list.innerHTML = '<div style="text-align:center; color:red; padding:20px;">Failed to load.</div>');
     }
 </script>
 

@@ -74,73 +74,21 @@ $dashboard = getDashboardData($conn);
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Dashboard | Trishe ERP</title>
 
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
+  <link rel="stylesheet" href="css/admin_style.css">
+
   <style>
-    /* =========================================
-       GLOBAL VARIABLES & RESET
-       ========================================= */
-    :root {
-      --primary: #4f46e5;
-      --primary-hover: #4338ca;
-      --bg-body: #f1f5f9;
-      --card-bg: #ffffff;
-      --text-main: #0f172a;
-      --text-muted: #64748b;
-      --border: #e2e8f0;
-      --success: #10b981;
-      --warning: #f59e0b;
-      --danger: #ef4444;
-      --info: #3b82f6;
-      --radius: 12px;
-      --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    html {
-      font-size: 16px;
-    }
-
-    /* Ensures base font is readable on mobile */
-
-    body {
-      font-family: 'Inter', sans-serif;
-      background: var(--bg-body);
-      color: var(--text-main);
-      padding-left: 260px;
-      /* Desktop Sidebar Width */
-      padding-bottom: 80px;
-      overflow-x: hidden;
-      /* Stops horizontal scrolling */
-    }
-
     .container {
       width: 100%;
-
+      max-width: 1400px;
       margin: 0 auto;
-      padding: 5px;
-    }
-
-    /* =========================================
-       HEADER
-       ========================================= */
-    .page-header {
-      margin-bottom: 24px;
-    }
-
-    .page-title {
-      font-size: 1.8rem;
-      font-weight: 800;
-      color: var(--text-main);
+      padding: 20px;
+      overflow-x: hidden;
     }
 
     .page-subtitle {
@@ -149,9 +97,7 @@ $dashboard = getDashboardData($conn);
       margin-top: 5px;
     }
 
-    /* =========================================
-       STAT CARDS (TOP ROW)
-       ========================================= */
+    /* STAT CARDS (TOP ROW) */
     .dashboard-grid {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
@@ -161,15 +107,20 @@ $dashboard = getDashboardData($conn);
 
     .stat-card {
       background: var(--card-bg);
-      padding: 24px;
+      padding: 20px;
       border-radius: var(--radius);
-      box-shadow: var(--shadow-sm);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
       border: 1px solid var(--border);
-      border-top: 5px solid var(--primary);
+      border-top: 4px solid var(--primary);
       display: flex;
       flex-direction: column;
       justify-content: center;
       transition: transform 0.2s;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
     }
 
     .stat-card.warning {
@@ -189,7 +140,7 @@ $dashboard = getDashboardData($conn);
     }
 
     .stat-label {
-      font-size: 0.9rem;
+      font-size: 0.8rem;
       font-weight: 700;
       color: var(--text-muted);
       text-transform: uppercase;
@@ -198,21 +149,20 @@ $dashboard = getDashboardData($conn);
     }
 
     .stat-value {
-      font-size: 2.2rem;
+      font-size: 2rem;
       font-weight: 800;
       color: var(--text-main);
       line-height: 1.2;
     }
 
     .stat-subtext {
-      font-size: 0.9rem;
-      color: #94a3b8;
+      font-size: 0.85rem;
+      color: #64748b;
       margin-top: 8px;
+      font-weight: 500;
     }
 
-    /* =========================================
-       MAIN LAYOUT (SHELL)
-       ========================================= */
+    /* MAIN LAYOUT (SHELL) */
     .shell {
       display: grid;
       grid-template-columns: 2fr 1fr;
@@ -220,30 +170,15 @@ $dashboard = getDashboardData($conn);
       align-items: start;
     }
 
-    .section-card {
-      background: var(--card-bg);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow-sm);
-      border: 1px solid var(--border);
-      padding: 24px;
-      margin-bottom: 24px;
+    /* 🌟 MAGICAL FIX FOR RESPONSIVE: `min-width: 0` stops table from breaking grid! */
+    .main-inner,
+    .right-side {
+      min-width: 0;
       width: 100%;
       overflow: hidden;
     }
 
-    .section-title {
-      font-size: 1.2rem;
-      font-weight: 700;
-      margin-bottom: 20px;
-      color: var(--text-main);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    /* =========================================
-       QUICK ACTIONS
-       ========================================= */
+    /* QUICK ACTIONS */
     .quick-actions {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -259,7 +194,7 @@ $dashboard = getDashboardData($conn);
       text-decoration: none;
       color: var(--text-main);
       font-weight: 600;
-      font-size: 1rem;
+      font-size: 0.95rem;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -267,71 +202,19 @@ $dashboard = getDashboardData($conn);
       transition: all 0.2s ease;
     }
 
+    .action-btn:hover {
+      background: #fff;
+      border-color: var(--primary);
+      color: var(--primary);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
     .action-btn i {
-      font-size: 2rem;
+      font-size: 1.8rem;
       color: var(--primary);
     }
 
-    /* =========================================
-       TABLE (RECENT ACTIVITY)
-       ========================================= */
-    .table-responsive {
-      width: 100%;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-    }
-
-    th {
-      padding: 15px;
-      font-size: 0.85rem;
-      font-weight: 700;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      border-bottom: 1px solid var(--border);
-    }
-
-    td {
-      padding: 15px;
-      border-bottom: 1px solid var(--border);
-      font-size: 1rem;
-      color: var(--text-main);
-      vertical-align: middle;
-    }
-
-    tr:last-child td {
-      border-bottom: none;
-    }
-
-    .badge {
-      padding: 6px 10px;
-      border-radius: 6px;
-      font-size: 0.8rem;
-      font-weight: 700;
-      text-transform: uppercase;
-    }
-
-    .bg-success {
-      background: #dcfce7;
-      color: #15803d;
-    }
-
-    .bg-warning {
-      background: #fef3c7;
-      color: #b45309;
-    }
-
-    .bg-secondary {
-      background: #f1f5f9;
-      color: #475569;
-    }
-
-    /* =========================================
-       RIGHT SIDEBAR (ALERTS & LINKS)
-       ========================================= */
+    /* RIGHT SIDEBAR (ALERTS & LINKS) */
     .list-group {
       display: flex;
       flex-direction: column;
@@ -348,8 +231,15 @@ $dashboard = getDashboardData($conn);
       align-items: center;
       text-decoration: none;
       color: var(--text-main);
-      font-size: 1rem;
-      font-weight: 500;
+      font-size: 0.95rem;
+      font-weight: 600;
+      transition: 0.2s;
+      word-break: break-word;
+    }
+
+    .list-group-item:hover {
+      border-color: #cbd5e1;
+      background: #fff;
     }
 
     .empty-state {
@@ -365,7 +255,8 @@ $dashboard = getDashboardData($conn);
     }
 
     .empty-state p {
-      font-size: 1.1rem;
+      font-size: 1rem;
+      font-weight: 500;
     }
 
     .chart-wrapper {
@@ -374,9 +265,16 @@ $dashboard = getDashboardData($conn);
       position: relative;
     }
 
-    /* =========================================
-       MOBILE RESPONSIVE (BIG & TOUCH FRIENDLY)
-       ========================================= */
+    /* ========================================================
+       🌟 100% PERFECT MOBILE RESPONSIVE MEDIA QUERIES
+       ======================================================== */
+
+    @media (max-width: 1200px) {
+      .dashboard-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
     @media (max-width: 1024px) {
       body {
         padding-left: 0;
@@ -389,99 +287,71 @@ $dashboard = getDashboardData($conn);
 
     @media (max-width: 768px) {
       .container {
-        padding: 15px;
+        padding: 12px;
       }
 
       .page-header {
         text-align: center;
+        margin-bottom: 20px;
       }
 
       .page-title {
-        font-size: 1.6rem;
+        font-size: 1.5rem;
+        justify-content: center;
       }
 
-      /* Stack Stat Cards 1 per row for maximum readability */
+      /* Stat Cards: Mobile par 2 lines mein */
       .dashboard-grid {
-        grid-template-columns: 1fr 1fr;
-        gap: 15px;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
       }
 
-      /* Quick Actions 2x2 Grid */
-      .quick-actions {
-        grid-template-columns: 1fr 1fr;
-        gap: 15px;
-      }
-
-      .action-btn {
-        padding: 25px 15px;
-        font-size: 1.1rem;
-      }
-
-      .action-btn i {
-        font-size: 2.5rem;
-      }
-
-      .section-card {
+      .stat-card {
         padding: 15px;
       }
 
-      /* -----------------------------------------
-           TABLE TO CARDS CONVERSION (FIXES ZOOM ISSUE)
-           ----------------------------------------- */
-      table,
-      thead,
-      tbody,
-      th,
-      td,
-      tr {
-        display: block;
-        width: 100%;
+      .stat-value {
+        font-size: 1.5rem;
       }
 
-      thead {
-        display: none;
+      /* Quick Actions: Mobile par bade buttons 2 line mein */
+      .quick-actions {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
       }
 
-      /* Hide Headers */
-
-      tr {
-        margin-bottom: 15px;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 10px;
-        background: #fff;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-      }
-
-      td {
-        border: none;
-        border-bottom: 1px dashed var(--border);
-        padding: 12px 5px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        text-align: right;
-        font-size: 1.05rem;
-        /* Big text */
-      }
-
-      td:last-child {
-        border-bottom: none;
-      }
-
-      /* Pseudo Labels */
-      td::before {
-        content: attr(data-label);
-        font-weight: 700;
-        color: var(--text-muted);
-        text-transform: uppercase;
+      .action-btn {
+        padding: 15px;
         font-size: 0.85rem;
-        text-align: left;
-        padding-right: 15px;
+      }
+
+      .action-btn i {
+        font-size: 1.5rem;
+      }
+
+      /* Charts aur Cards ki padding mobile par kam rahegi */
+      .card-header {
+        font-size: 0.95rem;
+        padding: 12px 15px;
+      }
+
+      .card>div {
+        padding: 15px !important;
+      }
+    }
+
+    @media (max-width: 480px) {
+
+      /* Choti screen par stat cards ek ke niche ek */
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .quick-actions {
+        grid-template-columns: 1fr;
       }
     }
   </style>
-
 </head>
 
 <body>
@@ -495,6 +365,11 @@ $dashboard = getDashboardData($conn);
     $td_profit = floatval($dashboard['today_profit_data']['today_profit'] ?? 0);
     $margin_pct = ($td_sales > 0) ? ($td_profit / $td_sales) * 100 : 0;
     ?>
+
+    <div class="page-header">
+      <h1 class="page-title"><i class="fas fa-chart-line text-primary"></i> Dashboard Overview</h1>
+      <div class="page-subtitle">Welcome back, here is what's happening today.</div>
+    </div>
 
     <div class="dashboard-grid">
       <div class="stat-card" style="border-top-color: #3b82f6;">
@@ -533,38 +408,42 @@ $dashboard = getDashboardData($conn);
     <div class="shell">
       <div class="main-inner">
 
-        <div class="section-card">
-          <h4 class="section-title"><i class="fas fa-bolt text-warning"></i> Quick Actions</h4>
-          <div class="quick-actions">
-            <a href="process_raw_material.php" class="action-btn">
-              <i class="fas fa-play-circle"></i>
-              Start Process
-            </a>
-            <a href="admin_orders.php?view=services" class="action-btn">
-              <i class="fas fa-tools"></i>
-              Job Work
-            </a>
-            <a href="pos.php" class="action-btn">
-              <i class="fas fa-cart-plus"></i>
-              New Sale
-            </a>
-            <a href="admin_customers.php" class="action-btn">
-              <i class="fas fa-address-book"></i>
-              Customers
-            </a>
+        <div class="card">
+          <div class="card-header"><i class="fas fa-bolt text-warning"></i> Quick Actions</div>
+          <div style="padding: 20px;">
+            <div class="quick-actions">
+              <a href="process_raw_material.php" class="action-btn">
+                <i class="fas fa-play-circle"></i>
+                Start Process
+              </a>
+              <a href="admin_orders.php?view=services" class="action-btn">
+                <i class="fas fa-tools"></i>
+                Job Work
+              </a>
+              <a href="pos.php" class="action-btn">
+                <i class="fas fa-cart-plus"></i>
+                New Sale
+              </a>
+              <a href="admin_customers.php" class="action-btn">
+                <i class="fas fa-address-book"></i>
+                Customers
+              </a>
+            </div>
           </div>
         </div>
 
-        <div class="section-card">
-          <h4 class="section-title"><i class="fas fa-chart-area text-info"></i> Production Trend</h4>
-          <div class="chart-wrapper">
-            <canvas id="productionChart"></canvas>
+        <div class="card">
+          <div class="card-header"><i class="fas fa-chart-area text-info"></i> Production Trend</div>
+          <div style="padding: 20px;">
+            <div class="chart-wrapper">
+              <canvas id="productionChart"></canvas>
+            </div>
           </div>
         </div>
 
-        <div class="section-card">
-          <h4 class="section-title"><i class="fas fa-history text-muted"></i> Recent Processing</h4>
-          <div class="table-responsive">
+        <div class="card">
+          <div class="card-header"><i class="fas fa-history text-muted"></i> Recent Processing</div>
+          <div class="table-wrap" style="border:none; box-shadow:none; border-radius:0;">
             <table>
               <thead>
                 <tr>
@@ -579,7 +458,7 @@ $dashboard = getDashboardData($conn);
               <tbody>
                 <?php if (empty($dashboard['recent_activities'])): ?>
                   <tr>
-                    <td colspan="6" class="empty-state" style="border:none;">
+                    <td colspan="6" class="empty-state">
                       <i class="fas fa-inbox"></i>
                       <p>No recent activities found.</p>
                     </td>
@@ -587,18 +466,19 @@ $dashboard = getDashboardData($conn);
                 <?php else: ?>
                   <?php foreach ($dashboard['recent_activities'] as $activity): ?>
                     <?php
-                    $status_color = '';
-                    if ($activity['status'] == 'completed') $status_color = 'bg-success';
-                    elseif ($activity['status'] == 'running') $status_color = 'bg-warning';
-                    else $status_color = 'bg-secondary';
+                    // Mapping old status logic to Master CSS Classes
+                    $status_class = '';
+                    if ($activity['status'] == 'completed') $status_class = 'st-completed';
+                    elseif ($activity['status'] == 'running') $status_class = 'st-processing';
+                    else $status_class = 'st-pending';
                     ?>
                     <tr>
-                      <td data-label="Batch No"><strong><?php echo htmlspecialchars($activity['batch_no']); ?></strong></td>
-                      <td data-label="Seed Type"><?php echo htmlspecialchars($activity['seed_name'] ?? 'Unknown'); ?></td>
-                      <td data-label="Input"><?php echo htmlspecialchars($activity['seed_qty']); ?> kg</td>
-                      <td data-label="Oil Out"><?php echo ($activity['oil_out'] > 0 ? $activity['oil_out'] : '0'); ?> Ltr</td>
-                      <td data-label="Status"><span class="badge <?php echo $status_color; ?>"><?php echo htmlspecialchars($activity['status']); ?></span></td>
-                      <td data-label="Time"><?php echo date('d M, h:i A', strtotime($activity['created_at'])); ?></td>
+                      <td style="font-weight:700; color:var(--primary); white-space:nowrap;">#<?php echo htmlspecialchars($activity['batch_no']); ?></td>
+                      <td style="white-space:nowrap;"><strong><?php echo htmlspecialchars($activity['seed_name'] ?? 'Unknown'); ?></strong></td>
+                      <td style="white-space:nowrap;"><?php echo htmlspecialchars($activity['seed_qty']); ?> kg</td>
+                      <td style="font-weight:600; white-space:nowrap;"><?php echo ($activity['oil_out'] > 0 ? $activity['oil_out'] : '0'); ?> Ltr</td>
+                      <td style="white-space:nowrap;"><span class="badge <?php echo $status_class; ?>"><?php echo htmlspecialchars($activity['status']); ?></span></td>
+                      <td style="color:var(--text-muted); font-size:0.85rem; white-space:nowrap;"><?php echo date('d M, h:i A', strtotime($activity['created_at'])); ?></td>
                     </tr>
                   <?php endforeach; ?>
                 <?php endif; ?>
@@ -611,49 +491,53 @@ $dashboard = getDashboardData($conn);
 
       <div class="right-side">
 
-        <div class="section-card">
-          <h4 class="section-title"><i class="fas fa-exclamation-triangle text-danger"></i> Low Stock Alerts</h4>
-          <?php if (empty($dashboard['low_stock_items'])): ?>
-            <div class="empty-state" style="padding:20px 10px;">
-              <i class="fas fa-check-circle text-success" style="font-size:2.5rem;"></i>
-              <p>Stocks are sufficient.</p>
-            </div>
-          <?php else: ?>
-            <div class="list-group">
-              <?php foreach ($dashboard['low_stock_items'] as $item): ?>
-                <?php
-                $min = isset($item['min_stock_level']) && $item['min_stock_level'] > 0 ? $item['min_stock_level'] : 50;
-                $percentage = ($item['current_stock'] / $min) * 100;
-                ?>
-                <div class="list-group-item">
-                  <div>
-                    <strong style="color:var(--text-main); display:block; font-size:1.1rem; margin-bottom:5px;"><?php echo htmlspecialchars($item['name']); ?></strong>
-                    <span style="font-size:0.9rem; color:var(--danger); font-weight:600;">Left: <?php echo $item['current_stock']; ?> kg</span>
+        <div class="card">
+          <div class="card-header"><i class="fas fa-exclamation-triangle text-danger"></i> Low Stock Alerts</div>
+          <div style="padding: 20px;">
+            <?php if (empty($dashboard['low_stock_items'])): ?>
+              <div class="empty-state">
+                <i class="fas fa-check-circle text-success" style="font-size:2.5rem; opacity:1;"></i>
+                <p style="margin-top:10px;">Stocks are sufficient.</p>
+              </div>
+            <?php else: ?>
+              <div class="list-group">
+                <?php foreach ($dashboard['low_stock_items'] as $item): ?>
+                  <?php
+                  $min = isset($item['min_stock_level']) && $item['min_stock_level'] > 0 ? $item['min_stock_level'] : 50;
+                  $percentage = ($item['current_stock'] / $min) * 100;
+                  ?>
+                  <div class="list-group-item">
+                    <div style="flex:1; min-width:0;">
+                      <strong style="color:var(--text-main); display:block; font-size:1rem; margin-bottom:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><?php echo htmlspecialchars($item['name']); ?></strong>
+                      <span style="font-size:0.85rem; color:var(--danger); font-weight:600;">Left: <?php echo $item['current_stock']; ?> kg</span>
+                    </div>
+                    <span class="badge" style="background:#fee2e2; color:#dc2626; padding:6px 10px; font-size:0.8rem; border:1px solid #fca5a5; white-space:nowrap;">
+                      <i class="fas fa-arrow-down"></i> <?php echo number_format($percentage, 0); ?>%
+                    </span>
                   </div>
-                  <span class="badge" style="background:#fee2e2; color:#dc2626; padding:8px 12px; font-size:0.9rem;">
-                    <i class="fas fa-arrow-down"></i> <?php echo number_format($percentage, 0); ?>%
-                  </span>
-                </div>
-              <?php endforeach; ?>
-            </div>
-          <?php endif; ?>
+                <?php endforeach; ?>
+              </div>
+            <?php endif; ?>
+          </div>
         </div>
 
-        <div class="section-card">
-          <h4 class="section-title"><i class="fas fa-link text-primary"></i> Helpful Links</h4>
-          <div class="list-group">
-            <a href="inventory.php" class="list-group-item">
-              <span><i class="fas fa-boxes text-muted" style="width:30px;"></i> Inventory</span>
-              <i class="fas fa-chevron-right text-muted"></i>
-            </a>
-            <a href="admin_orders.php" class="list-group-item">
-              <span><i class="fas fa-shopping-cart text-muted" style="width:30px;"></i> Sales Orders</span>
-              <i class="fas fa-chevron-right text-muted"></i>
-            </a>
-            <a href="reports.php" class="list-group-item">
-              <span><i class="fas fa-chart-pie text-muted" style="width:30px;"></i> Reports</span>
-              <i class="fas fa-chevron-right text-muted"></i>
-            </a>
+        <div class="card">
+          <div class="card-header"><i class="fas fa-link text-primary"></i> Helpful Links</div>
+          <div style="padding: 20px;">
+            <div class="list-group">
+              <a href="inventory.php" class="list-group-item">
+                <span><i class="fas fa-boxes text-primary" style="width:25px;"></i> Inventory</span>
+                <i class="fas fa-chevron-right text-muted"></i>
+              </a>
+              <a href="admin_orders.php" class="list-group-item">
+                <span><i class="fas fa-shopping-cart text-success" style="width:25px;"></i> Sales Orders</span>
+                <i class="fas fa-chevron-right text-muted"></i>
+              </a>
+              <a href="reports.php" class="list-group-item">
+                <span><i class="fas fa-chart-pie text-warning" style="width:25px;"></i> Reports</span>
+                <i class="fas fa-chevron-right text-muted"></i>
+              </a>
+            </div>
           </div>
         </div>
 
