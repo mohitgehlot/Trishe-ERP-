@@ -100,7 +100,18 @@ $selected_product_id = isset($_GET['selected_product']) ? intval($_GET['selected
 $target_qty = isset($_GET['target_qty']) ? floatval($_GET['target_qty']) : 1; 
 
 if($selected_product_id > 0) {
-    $sql = "SELECT id as recipe_id, packaging_id, item_type, qty_needed FROM product_recipes WHERE raw_material_id = $selected_product_id";
+    $sql = "SELECT pr.id as recipe_id, pr.packaging_id, pr.item_type, pr.qty_needed,
+            CASE 
+                WHEN pr.item_type = 'PACKING' THEN (SELECT item_name FROM inventory_packaging WHERE id = pr.packaging_id)
+                WHEN pr.item_type = 'OIL' THEN (SELECT CONCAT(name, ' Raw Oil') FROM seeds_master WHERE id = pr.packaging_id)
+                WHEN pr.item_type = 'CAKE' THEN (SELECT CONCAT(name, ' Cake') FROM seeds_master WHERE id = pr.packaging_id)
+            END as raw_name,
+            CASE 
+                WHEN pr.item_type = 'PACKING' THEN 'Pcs'
+                ELSE 'Kg'
+            END as raw_unit
+            FROM product_recipes pr 
+            WHERE pr.raw_material_id = $selected_product_id";
     $recipe_res = $conn->query($sql);
     
     if($recipe_res) {

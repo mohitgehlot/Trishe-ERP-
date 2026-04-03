@@ -1,5 +1,5 @@
 <?php
-// sales_entry.php - CRASH PROOF VERSION
+// sales_entry.php - DOUBLE COUNTING BUG FIXED (REMOVED STEP 6)
 ob_start();
 error_reporting(0);
 ini_set('display_errors', 0);
@@ -44,7 +44,7 @@ try {
     // --- 2. SAVE FINAL SALE ---
     elseif ($action == 'save_sale') {
         $cust_id = intval($_POST['customer_id'] ?? 0);
-        $cust_name = trim($_POST['customer_name'] ?? 'Walk-in');
+        $cust_name = trim($_POST['customer_name'] ?? 'Walk-in Customer');
         $cust_phone = trim($_POST['customer_phone'] ?? '');
         $pay_mode = trim($_POST['payment_mode'] ?? 'cash'); 
         $discount = floatval($_POST['discount'] ?? 0);
@@ -55,18 +55,27 @@ try {
 
         $conn->begin_transaction();
 
-        // 1. Customer Logic
-        if ($cust_id == 0 && !empty($cust_phone)) {
-            $check = $conn->query("SELECT id FROM customers WHERE phone = '$cust_phone' LIMIT 1");
-            if ($check && $check->num_rows > 0) {
-                $row = $check->fetch_assoc();
-                $cust_id = $row['id'];
-            } else {
+        // 🌟 1. Customer Logic (Auto-Save Walk-in Customer) 🌟
+        if ($cust_id == 0) {
+            // Agar phone number dala hai to check karo database me hai kya
+            if (!empty($cust_phone)) {
+                $check = $conn->query("SELECT id FROM customers WHERE phone = '$cust_phone' LIMIT 1");
+                if ($check && $check->num_rows > 0) {
+                    $row = $check->fetch_assoc();
+                    $cust_id = $row['id'];
+                }
+            }
+            
+            // Agar purana customer nahi mila, to NAYA CREATE karo
+            if ($cust_id == 0 && strtolower($cust_name) !== 'walk-in customer') {
                 $stmtNew = $conn->prepare("INSERT INTO customers (name, phone, created_at) VALUES (?, ?, NOW())");
                 $stmtNew->bind_param("ss", $cust_name, $cust_phone);
-                if ($stmtNew->execute()) $cust_id = $stmtNew->insert_id;
+                if ($stmtNew->execute()) {
+                    $cust_id = $stmtNew->insert_id; // Nayi ID store karo
+                }
             }
         }
+        
         $sql_cust_id = ($cust_id > 0) ? $cust_id : NULL;
 
         // 2. Order Totals Calculate Karna
@@ -82,19 +91,18 @@ try {
 
         // 3. Unique Order Number & Enums
         $order_no = 'ORD-' . time() . rand(10, 99); 
-        $db_status = 'Delivered'; // 'Completed' is not in your ENUM
+        $db_status = 'Delivered'; 
 
-        // 4. Payment Logic (Virtual Column 'due_amount' is REMOVED from INSERT)
+        // 4. Payment Logic
         $payment_status = 'Paid';
         $paid_amount = $final_amount;
 
         if (strtolower($pay_mode) === 'credit' || strtolower($pay_mode) === 'due') {
             $payment_status = 'Pending';
             $paid_amount = 0;
-            $pay_mode = 'Credit'; // This matches the ALTER TABLE we just did
+            $pay_mode = 'Credit';
         }
 
-        // 🔥 FIXED: No `due_amount`, changed `tax_amount` to `tax`, changed status to `Delivered`
         $stmtOrd = $conn->prepare("INSERT INTO orders (order_no, customer_id, subtotal, tax, discount, total, paid_amount, payment_status, payment_method, status, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())");
         if(!$stmtOrd) throw new Exception("Order Table Error: " . $conn->error); 
         
@@ -139,19 +147,15 @@ try {
             $stmtInv->execute();
         }
 
-        // 6. Update Customer Ledger if sale was on Credit
-        // yaha variable due_amount banayenge manually kyuki DB to virtual dega baad me
-        $actual_due_now = $final_amount - $paid_amount;
-        if ($actual_due_now > 0 && $sql_cust_id > 0) {
-            $conn->query("UPDATE customers SET total_due = total_due + $actual_due_now WHERE id = $sql_cust_id");
-        }
+        // 🌟 STEP 6 REMOVED: No more direct update to customers.total_due for Credit orders.
+        // It prevents the double counting bug entirely.
 
         $conn->commit();
         
         echo json_encode([
             'success' => true, 
             'message' => 'Sale Saved!', 
-            'order_id' => $order_no, 
+            'order_id' => $order_id, 
             'date' => date('d-M-Y h:i A'),
             'customer' => $cust_name,
             'items' => $cart,
@@ -179,7 +183,6 @@ try {
         $res = $conn->query("SELECT id, note, created_at FROM sales_holds ORDER BY id DESC");
         $holds = [];
         if($res) while($r = $res->fetch_assoc()) {
-            // Date formatting for better reading
             $r['created_at'] = date('d M, h:i A', strtotime($r['created_at']));
             $holds[] = $r;
         }
@@ -190,13 +193,9 @@ try {
     elseif ($action == 'recall_hold') {
         $id = intval($_POST['id']);
         
-        // 1. Get Data
         $res = $conn->query("SELECT cart_data FROM sales_holds WHERE id = $id");
         if($res && $row = $res->fetch_assoc()) {
-            // 2. Delete from Hold Table (Kyunki ab ye wapas cart me aa raha hai)
             $conn->query("DELETE FROM sales_holds WHERE id = $id");
-            
-            // 3. Return Data
             echo json_encode(['success' => true, 'cart' => json_decode($row['cart_data'], true)]);
         } else {
             throw new Exception("Hold record not found.");
@@ -205,7 +204,6 @@ try {
 
 } catch (Exception $e) {
     if(isset($conn)) $conn->rollback();
-    // Return Clean JSON Error
     echo json_encode(['success' => false, 'error' => $e->getMessage()]);
 }
 ?>

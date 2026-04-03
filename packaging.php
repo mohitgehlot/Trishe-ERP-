@@ -1,5 +1,5 @@
 <?php
-// packaging.php - Fully Synced with Master CSS & Responsive
+// packaging.php - STRICT ROLLBACK & MASTER CSS SYNCED
 ob_start();
 include 'config.php';
 session_start();
@@ -127,18 +127,26 @@ if (isset($_POST['action'])) {
 
             $conn->begin_transaction();
 
+            // 1. Create the Main Product
             $stmt = $conn->prepare("INSERT INTO products (name, weight, unit, seed_id, is_active, barcode, product_type) VALUES (?, ?, ?, ?, 1, ?, 'oil')");
             $stmt->bind_param("sdsis", $final_prod_name, $total_oil_weight_kg, $db_unit, $seed_id, $barcode);
             $stmt->execute();
 
             $new_product_id = $stmt->insert_id;
 
-            $stmtRec = $conn->prepare("INSERT INTO product_recipes (raw_material_id, packaging_id, item_type, qty_needed) VALUES (?, ?, 'PACKING', ?)");
-            $stmtRec->bind_param("iii", $new_product_id, $pack_mat_id, $multiplier);
-            $stmtRec->execute();
+            // 🌟 FIX: 2. Add Empty Tin to Recipe 🌟
+            $stmtRecPack = $conn->prepare("INSERT INTO product_recipes (raw_material_id, packaging_id, item_type, qty_needed) VALUES (?, ?, 'PACKING', ?)");
+            $stmtRecPack->bind_param("iii", $new_product_id, $pack_mat_id, $multiplier);
+            $stmtRecPack->execute();
+
+            // 🌟 FIX: 3. Add Raw Oil to Recipe 🌟
+            // Here 'packaging_id' stores the Seed ID when item_type is 'OIL'
+            $stmtRecOil = $conn->prepare("INSERT INTO product_recipes (raw_material_id, packaging_id, item_type, qty_needed) VALUES (?, ?, 'OIL', ?)");
+            $stmtRecOil->bind_param("iid", $new_product_id, $seed_id, $total_oil_weight_kg);
+            $stmtRecOil->execute();
 
             $conn->commit();
-            echo json_encode(['success' => true, 'message' => "New Product Created!"]);
+            echo json_encode(['success' => true, 'message' => "New Product Created Successfully!"]);
         } catch (Exception $e) {
             $conn->rollback();
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
@@ -148,7 +156,7 @@ if (isset($_POST['action'])) {
 }
 
 // ==========================================
-// B. SAVE PRODUCTION
+// B. SAVE PRODUCTION (Strict Rollback Logic)
 // ==========================================
 if (isset($_POST['save_production'])) {
     ob_clean();
@@ -166,32 +174,55 @@ if (isset($_POST['save_production'])) {
     }
 
     try {
+        // 🌟 Transaction Shuru (Lock the database state)
         $conn->begin_transaction();
 
         $prod = $conn->query("SELECT weight, seed_id FROM products WHERE id = $prod_id")->fetch_assoc();
+        if (!$prod) {
+            throw new Exception("Product details not found.");
+        }
+
         $oil_to_deduct = floatval($prod['weight']) * $qty;
         $seed_id = intval($prod['seed_id']);
 
-        // DEDUCT LOOSE OIL
+        // 🌟 STEP 1: DEDUCT LOOSE OIL
         $stmtOil = $conn->prepare("INSERT INTO raw_material_inventory (seed_id, product_type, batch_no, quantity, unit, transaction_type, source_type, notes, transaction_date, created_by) VALUES (?, 'OIL', ?, ?, 'KG', 'RAW_OUT', 'PRODUCTION', 'Used for Batch $batch_no', NOW(), ?)");
+        if (!$stmtOil) throw new Exception("Database prepare error (Oil).");
+        
         $stmtOil->bind_param("isdi", $seed_id, $batch_no, $oil_to_deduct, $admin_id);
-        $stmtOil->execute();
-
-        // DEDUCT PACKAGING MATERIAL
-        $res_rec = $conn->query("SELECT packaging_id, qty_needed FROM product_recipes WHERE raw_material_id = $prod_id AND item_type = 'PACKING'");
-        while ($row = $res_rec->fetch_assoc()) {
-            $deduct_qty = floatval($row['qty_needed']) * $qty;
-            $conn->query("UPDATE inventory_packaging SET quantity = quantity - $deduct_qty WHERE id = {$row['packaging_id']}");
+        if (!$stmtOil->execute()) {
+            throw new Exception("Failed to deduct Loose Oil: " . $stmtOil->error);
         }
 
-        // ADD FINISHED GOODS
-        $stmtFG = $conn->prepare("INSERT INTO inventory_products (product_id, batch_no, qty, unit, mfg_date, created_at, transaction_type) VALUES (?, ?, ?, 'Pcs', ?, NOW(), 'PRODUCTION_OUTPUT')");
-        $stmtFG->bind_param("isis", $prod_id, $batch_no, $qty, $mfg_date);
-        $stmtFG->execute();
+        // 🌟 STEP 2: DEDUCT PACKAGING MATERIAL
+        $res_rec = $conn->query("SELECT packaging_id, qty_needed FROM product_recipes WHERE raw_material_id = $prod_id AND item_type = 'PACKING'");
+        if (!$res_rec) throw new Exception("Database error while fetching recipe.");
 
+        while ($row = $res_rec->fetch_assoc()) {
+            $deduct_qty = floatval($row['qty_needed']) * $qty;
+            $pack_id = $row['packaging_id'];
+            $update_pack = $conn->query("UPDATE inventory_packaging SET quantity = quantity - $deduct_qty WHERE id = $pack_id");
+            if (!$update_pack) {
+                throw new Exception("Failed to deduct empty container stock.");
+            }
+        }
+
+        // 🌟 STEP 3: ADD FINISHED GOODS
+        // Changed to 'PRODUCTION_OUTPUT' so POS query matches it 100%
+        $stmtFG = $conn->prepare("INSERT INTO inventory_products (product_id, batch_no, qty, unit, mfg_date, created_at, transaction_type) VALUES (?, ?, ?, 'Pcs', ?, NOW(), 'PRODUCTION')");
+        if (!$stmtFG) throw new Exception("Database prepare error (Finished Goods).");
+        
+        $stmtFG->bind_param("isis", $prod_id, $batch_no, $qty, $mfg_date);
+        if (!$stmtFG->execute()) {
+            throw new Exception("Failed to save Packed Bottles in stock: " . $stmtFG->error);
+        }
+
+        // 🌟 FINAL STEP: ALL GOOD, SAVE IT! (Commit)
         $conn->commit();
-        echo json_encode(['success' => true, 'message' => "Production Saved! Stock updated."]);
+        echo json_encode(['success' => true, 'message' => "Production successfully saved & stock accurately updated!"]);
+
     } catch (Exception $e) {
+        // 🌟 REVERT EVERYTHING (Rollback) agar Exception hit hua
         $conn->rollback();
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
@@ -353,7 +384,7 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
         <?php endif; ?>
 
         <div class="page-header-box">
-            <h1 class="page-title"><i class="fas fa-box-open text-primary" style="margin-right:8px;"></i> Daily Production & Packaging</h1>
+            <h1 class="page-title" style="margin:0; font-size:1.5rem; font-weight:700;"><i class="fas fa-box-open text-primary" style="margin-right:8px;"></i> Daily Production & Packaging</h1>
             <div>
                 <button class="btn btn-outline" onclick="openGlobalCreateModal()">
                     <i class="fas fa-plus"></i> Create New Size
@@ -440,7 +471,7 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
                         <?php else: ?>
                             <?php foreach ($saved_sizes as $size): ?>
                                 <tr>
-                                    <td><span class="badge bg-gray">#<?= $size['prod_id'] ?></span></td>
+                                    <td><span class="badge bg-gray" style="background:#e2e8f0; color:#475569; padding:4px 8px; border-radius:12px;">#<?= $size['prod_id'] ?></span></td>
                                     <td style="font-weight:700; color:var(--text-main);"><?= htmlspecialchars($size['prod_name']) ?></td>
                                     <td style="font-weight:600; color:var(--primary);"><?= floatval($size['oil_weight']) ?> Kg</td>
                                     <td>
@@ -448,7 +479,7 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
                                         <span style="font-weight:800; color:var(--success);"><?= floatval($size['qty_needed']) ?>x</span> <?= htmlspecialchars($size['container_name']) ?>
                                     </td>
                                     <td style="text-align:right;">
-                                        <a href="?delete_size=<?= $size['prod_id'] ?>" class="btn-icon delete" onclick="return confirm('Are you sure you want to delete this packaging configuration?');" title="Delete">
+                                        <a href="?delete_size=<?= $size['prod_id'] ?>" class="btn-icon delete" style="color:var(--danger);" onclick="return confirm('Are you sure you want to delete this packaging configuration?');" title="Delete">
                                             <i class="fas fa-trash-alt"></i>
                                         </a>
                                     </td>
@@ -465,30 +496,6 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
     
 
     <script>
-        // --- MODAL LOGIC (With Keyboard Shortcut) ---
-        const createModal = document.getElementById('productModal');
-
-        function openCreateModal() {
-            createModal.classList.add('active');
-        }
-
-        function closeCreateModal() {
-            createModal.classList.remove('active');
-        }
-
-        window.onclick = function(e) {
-            if (e.target == createModal) closeCreateModal();
-        }
-
-        // Shortcut Key (Alt + C for Create Size)
-        document.addEventListener('keydown', function(e) {
-            if (e.altKey && (e.key === 'c' || e.key === 'C')) {
-                e.preventDefault();
-                openCreateModal();
-            }
-            if (e.key === "Escape") closeCreateModal();
-        });
-
         // --- STOCK CHECKING ---
         function checkStock() {
             const prodId = document.getElementById('product_id').value;
@@ -577,39 +584,14 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
                         alert(res.message);
                         window.location.reload();
                     } else {
+                        // Agar server se error aaye, to batao aur button wapas enable karo
                         alert("Error: " + res.error);
                         btn.innerHTML = "<i class='fas fa-check-circle'></i> Confirm & Save Production";
                         btn.disabled = false;
                     }
                 }).catch(err => {
-                    alert("Network Error");
-                    btn.disabled = false;
-                });
-        });
-
-        // --- CREATE NEW PRODUCT / COMBO ---
-        document.getElementById('newProdForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const btn = this.querySelector('button[type="submit"]');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
-            btn.disabled = true;
-
-            fetch('packaging.php', {
-                    method: 'POST',
-                    body: new FormData(this)
-                })
-                .then(r => r.json())
-                .then(res => {
-                    if (res.success) {
-                        window.location.reload();
-                    } else {
-                        alert("Error: " + res.error);
-                        btn.innerHTML = originalText;
-                        btn.disabled = false;
-                    }
-                }).catch(err => {
-                    alert("Network Error");
+                    alert("Network Error: Could not save production.");
+                    btn.innerHTML = "<i class='fas fa-check-circle'></i> Confirm & Save Production";
                     btn.disabled = false;
                 });
         });

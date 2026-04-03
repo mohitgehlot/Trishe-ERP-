@@ -1,5 +1,5 @@
 <?php
-// costing.php - INTEGRATED WITH MASTER CSS
+// costing.php - INTEGRATED WITH 'cake_rate' DB COLUMN
 include 'config.php';
 session_start();
 
@@ -10,7 +10,6 @@ if (!isset($_SESSION['admin_id'])) {
 
 // 1. FETCH ALL PRODUCTS FOR LIST & TABLE
 $products = [];
-// Table query includes seeds master to show seed names
 $sql = "SELECT p.*, sm.name as seed_name, sm.id as seed_id_from_master 
         FROM products p 
         LEFT JOIN seeds_master sm ON p.seed_id = sm.id 
@@ -35,6 +34,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'get_cost_data') {
         $seed_rate = 0;
         $live_yield = 0;
         $proc_cost = 3.00;
+        $cake_rate = 25.00; // Default fallback
 
         if ($seed_id > 0) {
             $sql_rate = "SELECT price_per_qtl/100 as last_rate FROM inventory_grn_items WHERE seed_id = $seed_id ORDER BY id DESC LIMIT 1";
@@ -44,12 +44,14 @@ if (isset($_POST['action']) && $_POST['action'] == 'get_cost_data') {
                 $seed_rate = floatval($d['last_rate'] ?? 0);
             }
 
-            $sql_master = "SELECT avg_oil_recovery, processing_cost FROM seeds_master WHERE id = $seed_id";
+            // 🌟 Reading EXACTLY from 'cake_rate' column 🌟
+            $sql_master = "SELECT avg_oil_recovery, processing_cost, cake_rate FROM seeds_master WHERE id = $seed_id";
             $res_master = $conn->query($sql_master);
             if ($res_master && $res_master->num_rows > 0) {
                 $m_data = $res_master->fetch_assoc();
                 $live_yield = floatval($m_data['avg_oil_recovery']);
                 if (floatval($m_data['processing_cost']) > 0) $proc_cost = floatval($m_data['processing_cost']);
+                if (floatval($m_data['cake_rate']) > 0) $cake_rate = floatval($m_data['cake_rate']);
             }
         }
 
@@ -79,6 +81,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'get_cost_data') {
             'pack_cost' => $pack_cost,
             'extraction' => $final_extraction,
             'proc_cost' => $proc_cost,
+            'cake_rate' => $cake_rate,
             'mrp' => floatval($prod['base_price']),
             'debug_msg' => $source_msg
         ]);
@@ -96,6 +99,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
     $pid = intval($_POST['pid']);
     $extract = floatval($_POST['extraction']);
     $proc = floatval($_POST['proc_cost']);
+    $cake_rate = floatval($_POST['cake_rate']);
     $final_cost = floatval($_POST['final_cost']);
     $selling_price = floatval($_POST['selling_price']);
 
@@ -105,8 +109,9 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
         $seed_id = $p_row['seed_id'];
 
         if ($seed_id > 0) {
-            $stmt1 = $conn->prepare("UPDATE seeds_master SET processing_cost = ? WHERE id = ?");
-            $stmt1->bind_param("di", $proc, $seed_id);
+            // 🌟 Updating EXACTLY to 'cake_rate' column 🌟
+            $stmt1 = $conn->prepare("UPDATE seeds_master SET processing_cost = ?, cake_rate = ? WHERE id = ?");
+            $stmt1->bind_param("ddi", $proc, $cake_rate, $seed_id);
             $stmt1->execute();
         }
 
@@ -236,7 +241,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
                 grid-template-columns: 1fr;
             }
 
-            /* Stack inputs on small screens */
             .search-box {
                 width: 100% !important;
                 margin-top: 10px;
@@ -249,7 +253,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
     <?php include 'admin_header.php'; ?>
 
     <div class="container">
-
         <div class="page-header-box">
             <h1 class="page-title"><i class="fas fa-calculator text-primary" style="margin-right:10px;"></i> Cost & Price Management</h1>
             <div style="color:var(--text-muted); font-size:0.9rem; font-weight:500;">Calculate dynamic landing cost based on live raw material rates.</div>
@@ -276,7 +279,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
                         </div>
                         <div class="form-group" style="margin-bottom:0;">
                             <label class="form-label">Cake Rate (₹/Kg)</label>
-                            <input type="number" id="cake_rate" class="form-input" value="25" oninput="calculate()">
+                            <input type="number" id="cake_rate" class="form-input" oninput="calculate()">
                         </div>
                     </div>
 
@@ -421,6 +424,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
                         document.getElementById('seed_rate').value = res.seed_rate;
                         document.getElementById('extraction').value = res.extraction;
                         document.getElementById('proc_cost').value = res.proc_cost;
+                        document.getElementById('cake_rate').value = res.cake_rate; // Loads from DB
                         document.getElementById('pack_cost').value = res.pack_cost;
                         document.getElementById('pack_cost_disp').value = "₹" + res.pack_cost.toFixed(2);
                         document.getElementById('selling_price').value = res.mrp;
@@ -436,7 +440,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
         }
 
         function calculate() {
-            // If weight is 0 in DB, calculate for 1 Unit safely
             let calcWeight = currentOilWeight > 0 ? currentOilWeight : 1;
 
             const seedRate = parseFloat(document.getElementById('seed_rate').value) || 0;
@@ -447,7 +450,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
 
             if (extraction <= 0) return;
 
-            // Calculation formulas
             const seedNeeded = calcWeight / (extraction / 100);
             const cakeGenerated = seedNeeded - calcWeight;
 
@@ -467,7 +469,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
             document.getElementById('res_pack').innerText = packCost.toFixed(2);
             document.getElementById('res_final').innerText = finalCost.toFixed(2);
 
-            // Profit Calculation
             const sellPrice = parseFloat(document.getElementById('selling_price').value) || 0;
             const profit = sellPrice - finalCost;
             const margin = sellPrice > 0 ? (profit / sellPrice * 100) : 0;
@@ -493,6 +494,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
             fd.append('pid', pid);
             fd.append('extraction', document.getElementById('extraction').value);
             fd.append('proc_cost', document.getElementById('proc_cost').value);
+            fd.append('cake_rate', document.getElementById('cake_rate').value); // Saves to DB
             fd.append('final_cost', document.getElementById('res_final').innerText);
             fd.append('selling_price', document.getElementById('selling_price').value);
 
@@ -523,9 +525,8 @@ if (isset($_POST['action']) && $_POST['action'] == 'save_costing') {
             const table = document.getElementById("summaryTable");
             const tr = table.getElementsByTagName("tr");
 
-            // Start from 1 to skip table header
             for (let i = 1; i < tr.length; i++) {
-                let td = tr[i].getElementsByTagName("td")[0]; // Search only in Product Name column
+                let td = tr[i].getElementsByTagName("td")[0];
                 if (td) {
                     let txtValue = td.textContent || td.innerText;
                     tr[i].style.display = txtValue.toLowerCase().indexOf(filter) > -1 ? "" : "none";

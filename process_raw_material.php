@@ -1,5 +1,5 @@
 <?php
-// process_raw_material.php - FULLY RESPONSIVE & MASTER CSS INTEGRATED
+// process_raw_material.php - STABLE VERSION WITH COMPACT TICKER BAR
 ob_start();
 include 'config.php';
 session_start();
@@ -28,7 +28,6 @@ function convertToIST($datetime)
     return $date->format('d M, h:i A');
 }
 
-// --- Update Seed Master Stats ---
 function updateSeedMasterStats($conn, $seed_id)
 {
     $sql_stats = "SELECT SUM(seed_qty) as total_in, SUM(oil_out) as total_oil, SUM(cake_out) as total_cake FROM seed_processing WHERE seed_id = ? AND status = 'completed'";
@@ -80,10 +79,18 @@ function fetchMachines($conn)
 function fetchRunningProcesses($conn)
 {
     $rows = [];
-    $sql = "SELECT sp.*, sm.name as seed_name, m.name as machine_name FROM seed_processing sp LEFT JOIN seeds_master sm ON sp.seed_id = sm.id LEFT JOIN machines m ON sp.machine_id = m.id WHERE sp.end_time IS NULL ORDER BY sp.start_time DESC";
+    $sql = "SELECT sp.*, sm.name as seed_name, sm.avg_oil_recovery, sm.avg_cake_recovery, m.name as machine_name 
+            FROM seed_processing sp 
+            LEFT JOIN seeds_master sm ON sp.seed_id = sm.id 
+            LEFT JOIN machines m ON sp.machine_id = m.id 
+            WHERE sp.end_time IS NULL ORDER BY sp.start_time DESC";
     try {
         $res = $conn->query($sql);
-        if ($res) while ($r = $res->fetch_assoc()) $rows[] = $r;
+        if ($res) while ($r = $res->fetch_assoc()) {
+            $r['expected_oil'] = ($r['seed_qty'] * floatval($r['avg_oil_recovery'] ?? 0)) / 100;
+            $r['expected_cake'] = ($r['seed_qty'] * floatval($r['avg_cake_recovery'] ?? 0)) / 100;
+            $rows[] = $r;
+        }
     } catch (Exception $e) {
     }
     return $rows;
@@ -108,6 +115,20 @@ function fetchProcessHistory($conn)
     try {
         $res = $conn->query($sql);
         if ($res) while ($r = $res->fetch_assoc()) {
+            $r['duration'] = "N/A";
+            if (!empty($r['start_time']) && !empty($r['end_time'])) {
+                $start_stamp = strtotime($r['start_time']);
+                $end_stamp = strtotime($r['end_time']);
+                if ($start_stamp && $end_stamp) {
+                    $diff_seconds = abs($end_stamp - $start_stamp);
+                    $hours = floor($diff_seconds / 3600);
+                    $minutes = floor(($diff_seconds / 60) % 60);
+                    $seconds = $diff_seconds % 60;
+                    if ($hours > 0) $r['duration'] = "{$hours}h {$minutes}m";
+                    elseif ($minutes > 0) $r['duration'] = "{$minutes}m {$seconds}s";
+                    else $r['duration'] = "{$seconds}s";
+                }
+            }
             $r['start_time'] = convertToIST($r['start_time']);
             $r['end_time'] = convertToIST($r['end_time']);
             $rows[] = $r;
@@ -115,6 +136,73 @@ function fetchProcessHistory($conn)
     } catch (Exception $e) {
     }
     return $rows;
+}
+
+// 🌟 DASHBOARD STATS 🌟
+$dashboard_stats = [
+    'lifetime' => 0,
+    'today' => 0,
+    'avg_speed' => '0.0 Kg/Hr'
+];
+try {
+    $resLife = $conn->query("SELECT SUM(seed_qty) as total FROM seed_processing WHERE status = 'completed'");
+    if ($resLife && $row = $resLife->fetch_assoc()) $dashboard_stats['lifetime'] = $row['total'] ?? 0;
+
+    $resToday = $conn->query("SELECT SUM(seed_qty) as total FROM seed_processing WHERE DATE(start_time) = CURDATE()");
+    if ($resToday && $row = $resToday->fetch_assoc()) $dashboard_stats['today'] = $row['total'] ?? 0;
+
+    $resSpeed = $conn->query("SELECT SUM(seed_qty) as total_kg, SUM(ABS(TIMESTAMPDIFF(SECOND, start_time, end_time))) as total_sec FROM seed_processing WHERE status = 'completed' AND end_time IS NOT NULL");
+    if ($resSpeed && $row = $resSpeed->fetch_assoc()) {
+        $total_sec_abs = abs(floatval($row['total_sec']));
+        if ($total_sec_abs > 0 && $row['total_kg'] > 0) {
+            $speed = ($row['total_kg'] / $total_sec_abs) * 3600;
+            $dashboard_stats['avg_speed'] = number_format($speed, 1) . " Kg/Hr";
+        }
+    }
+} catch (Exception $e) {
+}
+
+// 🌟 KPI: SEED SPECIFIC AVERAGE TIME (PER 100 KG) 🌟
+$seed_speeds = [];
+try {
+    $sql_seed_speed = "SELECT sm.name as seed_name, 
+                              SUM(sp.seed_qty) as total_kg, 
+                              SUM(ABS(TIMESTAMPDIFF(SECOND, sp.start_time, sp.end_time))) as total_sec 
+                       FROM seed_processing sp 
+                       JOIN seeds_master sm ON sp.seed_id = sm.id 
+                       WHERE sp.status = 'completed' AND sp.end_time IS NOT NULL 
+                       GROUP BY sp.seed_id, sm.name 
+                       HAVING total_kg > 0 
+                       ORDER BY sm.name ASC";
+    $res_ss = $conn->query($sql_seed_speed);
+
+    if ($res_ss) {
+        while ($row = $res_ss->fetch_assoc()) {
+            $total_sec_abs = floatval($row['total_sec']);
+            $total_kg = floatval($row['total_kg']);
+
+            if ($total_sec_abs > 0 && $total_kg > 0) {
+                $sec_per_kg = $total_sec_abs / $total_kg;
+                $sec_per_100kg = $sec_per_kg * 100; // Calculate for 100 Kg
+
+                $h = floor($sec_per_100kg / 3600);
+                $m = floor(($sec_per_100kg / 60) % 60);
+
+                $time_str = "";
+                if ($h > 0) {
+                    $time_str = "{$h}h {$m}m";
+                } else {
+                    $time_str = "{$m} mins";
+                }
+
+                $seed_speeds[] = [
+                    'name' => $row['seed_name'],
+                    'time_100kg' => $time_str
+                ];
+            }
+        }
+    }
+} catch (Exception $e) {
 }
 
 // ================= AJAX HANDLERS =================
@@ -170,7 +258,6 @@ if (isset($_POST['action']) && $_POST['action'] == 'get_grn_batches') {
         $date = date('d-M', strtotime($row['created_at']));
         $item_id = $row['item_id'];
         $avail = round($row['available_kg'], 2);
-
         $row['display_text'] = "Bag ID: {$item_id} (Left: {$avail} Kg) - {$date}";
         $row['batch_no'] = "ITEM-" . $item_id;
         $row['available_kg'] = $avail;
@@ -216,15 +303,13 @@ if (isset($_POST['start_process'])) {
         $stmtUpdateMaster->bind_param("di", $qty, $seed_id);
         if (!$stmtUpdateMaster->execute()) throw new Exception("Failed to update Master Stock");
 
-        // Minus from Bag logic
         if (!empty($linked_grn) && strpos($linked_grn, 'ITEM-') === 0) {
             $item_id = (int)str_replace('ITEM-', '', $linked_grn);
             if ($item_id > 0) {
                 $bag_check = $conn->query("SELECT (weight_kg - used_weight_kg) as avail FROM inventory_grn_items WHERE id = $item_id")->fetch_assoc();
                 if ($bag_check && $qty > $bag_check['avail']) {
-                    throw new Exception("Error: This specific bag only has " . $bag_check['avail'] . " Kg left! Please reduce input quantity.");
+                    throw new Exception("Error: This bag only has " . $bag_check['avail'] . " Kg left!");
                 }
-
                 $stmtUpdateBag = $conn->prepare("UPDATE inventory_grn_items SET used_weight_kg = used_weight_kg + ? WHERE id = ?");
                 $stmtUpdateBag->bind_param("di", $qty, $item_id);
                 $stmtUpdateBag->execute();
@@ -326,7 +411,6 @@ $process_history = fetchProcessHistory($conn);
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-
     <link rel="stylesheet" href="css/admin_style.css">
 
     <style>
@@ -343,7 +427,7 @@ $process_history = fetchProcessHistory($conn);
             border-radius: 8px;
             border: 1px solid var(--border);
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-            margin-bottom: 25px;
+            margin-bottom: 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -363,7 +447,89 @@ $process_history = fetchProcessHistory($conn);
             gap: 12px;
         }
 
-        /* GRID LAYOUT (Adjusted for History taking less space) */
+        /* 🌟 NEW: SLEEK TICKER BAR CSS 🌟 */
+        .ticker-wrap {
+            display: flex;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            align-items: center;
+            overflow: hidden;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .ticker-label {
+            background: var(--primary);
+            color: #fff;
+            padding: 10px 20px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ticker-content {
+            flex: 1;
+            padding: 10px 20px;
+            overflow-x: auto;
+            white-space: nowrap;
+            display: flex;
+            gap: 30px;
+            scrollbar-width: none;
+        }
+
+        .ticker-content::-webkit-scrollbar {
+            display: none;
+        }
+
+        .ticker-item {
+            font-size: 0.9rem;
+            color: var(--text-main);
+        }
+
+        .ticker-item strong {
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-right: 5px;
+        }
+
+        .ticker-item span {
+            font-weight: 800;
+            color: var(--success);
+        }
+
+        .top-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .top-stat-card {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .top-stat-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
         .grid-layout {
             display: grid;
             grid-template-columns: 400px 1fr;
@@ -377,7 +543,6 @@ $process_history = fetchProcessHistory($conn);
             width: 100%;
         }
 
-        /* BATCH CARDS (Running / Pending) */
         .batch-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -459,12 +624,10 @@ $process_history = fetchProcessHistory($conn);
             margin-bottom: 15px;
         }
 
-        /* 🌟 FIX: Remove horizontal scroll for table with few columns */
         .table-wrap table {
             min-width: 100% !important;
         }
 
-        /* RESPONSIVENESS */
         @media (max-width: 1024px) {
             .grid-layout {
                 grid-template-columns: 1fr;
@@ -477,13 +640,26 @@ $process_history = fetchProcessHistory($conn);
             .right-col {
                 order: 1;
             }
-
-            /* Tablet par running jobs pehle dikhenge */
         }
 
         @media (max-width: 768px) {
             .container {
                 padding: 15px;
+            }
+
+            .ticker-wrap {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .ticker-label {
+                text-align: center;
+                justify-content: center;
+            }
+
+            .top-stats-grid {
+                grid-template-columns: 1fr;
+                gap: 10px;
             }
 
             .page-header-box {
@@ -510,11 +686,9 @@ $process_history = fetchProcessHistory($conn);
 </head>
 
 <body>
-
     <?php include 'admin_header.php'; ?>
 
     <div class="container">
-
         <div class="page-header-box">
             <h1 class="page-title"><i class="fas fa-industry text-primary" style="margin-right:10px;"></i> Production Floor</h1>
             <div class="action-buttons">
@@ -526,12 +700,51 @@ $process_history = fetchProcessHistory($conn);
             </div>
         </div>
 
-        <div class="grid-layout">
+        <?php if (!empty($seed_speeds)): ?>
+            <div class="ticker-wrap">
+                <div class="ticker-label"><i class="fas fa-stopwatch"></i> 100 Kg Avg Time:</div>
+                <div class="ticker-content">
+                    <?php foreach ($seed_speeds as $speed): ?>
+                        <div class="ticker-item">
+                            <strong><?= htmlspecialchars($speed['name']) ?>:</strong>
+                            <span><?= $speed['time_100kg'] ?></span>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        <?php endif; ?>
 
+        <div class="top-stats-grid">
+            <div class="top-stat-card">
+                <div class="top-stat-icon" style="background: #eff6ff; color: #3b82f6;"><i class="fas fa-chart-area"></i></div>
+                <div>
+                    <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Lifetime Processed</div>
+                    <div style="font-size: 1.4rem; font-weight: 800; color: var(--text-main);"><?= number_format($dashboard_stats['lifetime'], 0) ?> Kg</div>
+                </div>
+            </div>
+
+            <div class="top-stat-card">
+                <div class="top-stat-icon" style="background: #fdf4ff; color: #d946ef;"><i class="fas fa-calendar-day"></i></div>
+                <div>
+                    <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Processed Today</div>
+                    <div style="font-size: 1.4rem; font-weight: 800; color: var(--text-main);"><?= number_format($dashboard_stats['today'], 0) ?> Kg</div>
+                </div>
+            </div>
+
+            <div class="top-stat-card">
+                <div class="top-stat-icon" style="background: #f0fdf4; color: #22c55e;"><i class="fas fa-tachometer-alt"></i></div>
+                <div>
+                    <div style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Avg. Processing Speed</div>
+                    <div style="font-size: 1.2rem; font-weight: 800; color: var(--text-main); margin-top:2px;"><?= $dashboard_stats['avg_speed'] ?></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-layout">
             <div class="left-col">
                 <div class="card">
                     <div class="card-header"><i class="fas fa-history text-muted"></i> Recent History</div>
-                    <div class="table-wrap" style="border:none; border-radius:0; box-shadow:none; max-height:400px;">
+                    <div class="table-wrap" style="border:none; border-radius:0; box-shadow:none; max-height:400px; overflow-y:auto;">
                         <table>
                             <thead>
                                 <tr>
@@ -550,7 +763,10 @@ $process_history = fetchProcessHistory($conn);
                                     <tr>
                                         <td>
                                             <strong style="color:var(--primary); font-size:0.95rem;"><?= $h['batch_no'] ?></strong><br>
-                                            <small style="color:var(--text-main); font-weight:600;"><?= $h['seed_name'] ?></small>
+                                            <small style="color:var(--text-main); font-weight:600;"><?= $h['seed_name'] ?></small><br>
+                                            <span style="font-size:0.75rem; color:var(--text-muted); display:inline-block; margin-top:4px;">
+                                                <i class="fas fa-stopwatch" style="color:var(--info);"></i> Time: <strong><?= $h['duration'] ?? 'N/A' ?></strong>
+                                            </span>
                                         </td>
                                         <td style="font-weight:600;"><?= number_format($h['seed_qty'], 2) ?> Kg</td>
                                         <td style="text-align:right;">
@@ -567,14 +783,12 @@ $process_history = fetchProcessHistory($conn);
             </div>
 
             <div class="right-col">
-
                 <h3 style="font-size:1.2rem; margin-bottom:20px; color:var(--text-main);"><i class="fas fa-sync fa-spin text-primary"></i> Currently Running</h3>
 
                 <div class="batch-grid">
                     <?php if (empty($running_processes)): ?>
                         <div style="grid-column:1/-1; text-align:center; padding:40px; color:var(--text-muted); border:2px dashed var(--border); border-radius:8px; background:white;">
-                            <i class="fas fa-bed fa-2x" style="margin-bottom:15px; opacity:0.5;"></i><br>
-                            No machines currently running.
+                            <i class="fas fa-bed fa-2x" style="margin-bottom:15px; opacity:0.5;"></i><br>No machines currently running.
                         </div>
                     <?php else: ?>
                         <?php foreach ($running_processes as $run): ?>
@@ -588,6 +802,19 @@ $process_history = fetchProcessHistory($conn);
                                     <div style="margin-bottom:8px;"><i class="fas fa-cog text-muted" style="width:20px;"></i> <?= $run['machine_name'] ?></div>
                                     <div><i class="fas fa-clock text-muted" style="width:20px;"></i> Started: <?= convertToIST($run['start_time']) ?></div>
                                 </div>
+
+                                <div style="background: #eef2ff; border: 1px dashed #a5b4fc; padding: 12px; border-radius: 6px; margin-bottom: 15px; text-align: center;">
+                                    <div style="font-size: 0.75rem; font-weight: 700; color: #4f46e5; text-transform: uppercase; margin-bottom: 6px; letter-spacing:0.5px;">🎯 Expected Target Yield</div>
+                                    <div style="display: flex; justify-content: space-around; font-weight: 700; font-size: 1rem;">
+                                        <span style="color: var(--success);" title="Based on <?= $run['avg_oil_recovery'] ?>% average recovery">
+                                            <i class="fas fa-tint" style="margin-right:3px;"></i> <?= number_format($run['expected_oil'], 1) ?> Kg
+                                        </span>
+                                        <span style="color: var(--warning);" title="Based on <?= $run['avg_cake_recovery'] ?>% average recovery">
+                                            <i class="fas fa-cookie" style="margin-right:3px;"></i> <?= number_format($run['expected_cake'], 1) ?> Kg
+                                        </span>
+                                    </div>
+                                </div>
+
                                 <form onsubmit="return stopBatch(event, this)">
                                     <input type="hidden" name="action" value="end_process">
                                     <input type="hidden" name="end_process" value="1">
@@ -653,7 +880,57 @@ $process_history = fetchProcessHistory($conn);
         </div>
     </div>
 
-    
+    <div id="globalStartModal" class="global-modal">
+        <div class="g-modal-content" style="max-width:500px;">
+            <div class="g-modal-header">
+                <h3 style="margin:0; font-size:1.2rem; color:var(--text-main);"><i class="fas fa-play-circle text-warning" style="margin-right:8px;"></i> Start New Batch</h3>
+                <span class="g-close-btn" onclick="closeStartModal()">&times;</span>
+            </div>
+            <div class="g-modal-body">
+                <form id="startForm">
+                    <input type="hidden" name="action" value="start_process">
+
+                    <div class="form-group">
+                        <label class="form-label">1. Select Machine</label>
+                        <select name="machine_id" id="machine_select" class="form-input" required>
+                            <option value="">-- Choose Machine --</option>
+                            <?php foreach ($machines as $m): ?>
+                                <option value="<?= $m['id'] ?>"><?= htmlspecialchars($m['name']) ?> - <?= htmlspecialchars($m['model']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">2. Select Seed (Raw Material)</label>
+                        <select name="seed_id" id="seed_select" class="form-input" required>
+                            <option value="">-- Choose Raw Material --</option>
+                            <?php foreach ($seeds as $s): ?>
+                                <option value="<?= $s['id'] ?>" data-stock="<?= $s['available_quantity'] ?>">
+                                    <?= htmlspecialchars($s['name']) ?> (Stock: <?= $s['available_quantity'] ?> Kg)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">3. Select GRN Bag (Optional)</label>
+                        <select name="linked_grn_no" id="grn_select" class="form-input">
+                            <option value="">-- Select Seed First --</option>
+                        </select>
+                        <small style="color:var(--text-muted); display:block; margin-top:4px;">Select specific bag to maintain traceability.</small>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label class="form-label">4. Input Quantity (Kg)</label>
+                        <input type="number" step="0.01" name="seed_qty" id="input_qty" class="form-input" placeholder="e.g. 50" required>
+                        <small id="stock_error" style="color:var(--danger); display:none; font-weight:600; margin-top:5px;"><i class="fas fa-exclamation-circle"></i> Error: Input quantity exceeds available stock!</small>
+                    </div>
+
+                    <button type="submit" id="startBtn" class="btn btn-primary" style="width:100%; margin-top:25px; padding:12px; background:var(--warning); border-color:var(--warning); color:#fff;"><i class="fas fa-power-off" style="margin-right:5px;"></i> Start Machine</button>
+                </form>
+            </div>
+        </div>
+    </div>
 
     <div id="seedModal" class="global-modal">
         <div class="g-modal-content" style="max-width:400px;">
@@ -701,12 +978,12 @@ $process_history = fetchProcessHistory($conn);
         }
 
         function closeStartModal() {
-            document.getElementById('startModal').classList.remove('active');
+            document.getElementById('globalStartModal').classList.remove('active');
         }
 
         window.onclick = function(e) {
             if (e.target == document.getElementById('seedModal')) closeSeedModal();
-            if (e.target == document.getElementById('startModal')) closeStartModal();
+            if (e.target == document.getElementById('globalStartModal')) closeStartModal();
         }
 
         document.getElementById('seedForm').addEventListener('submit', function(e) {
@@ -714,15 +991,13 @@ $process_history = fetchProcessHistory($conn);
             const btn = this.querySelector('button');
             btn.disabled = true;
             btn.innerHTML = 'Saving...';
-
             fetch('process_raw_material.php', {
                     method: 'POST',
                     body: new FormData(this)
                 })
                 .then(r => r.json()).then(res => {
-                    if (res.success) {
-                        window.location.reload();
-                    } else {
+                    if (res.success) window.location.reload();
+                    else {
                         alert("Error: " + res.error);
                         btn.disabled = false;
                         btn.innerText = "Save Seed";
@@ -730,31 +1005,27 @@ $process_history = fetchProcessHistory($conn);
                 });
         });
 
-        // --- CALCULATION LOGIC ---
+        // --- SAVE BATCH & STOP MACHINE ---
         function calcStats(input) {
             const form = input.closest('form');
             const inQty = parseFloat(form.querySelector('input[name="input_qty"]').value) || 0;
             const oil = parseFloat(form.querySelector('input[name="oil_out"]').value) || 0;
             const cake = parseFloat(form.querySelector('input[name="cake_out"]').value) || 0;
-
             const loss = inQty - (oil + cake);
             const eff = inQty > 0 ? (oil / inQty) * 100 : 0;
 
             const lEl = form.querySelector('.loss-val');
             lEl.innerText = loss.toFixed(2) + ' Kg';
-            lEl.style.color = loss < 0 ? '#dc2626' : 'inherit'; // Red if output > input
-
+            lEl.style.color = loss < 0 ? '#dc2626' : 'inherit';
             form.querySelector('.eff-val').innerText = eff.toFixed(1) + '%';
         }
 
-        // --- STOP & SAVE ACTIONS ---
         function stopBatch(e, form) {
             e.preventDefault();
             if (!confirm("Are you sure you want to stop this machine?")) return;
             const btn = form.querySelector('button');
             btn.innerHTML = 'Stopping...';
             btn.disabled = true;
-
             fetch('process_raw_material.php', {
                     method: 'POST',
                     body: new FormData(form)
@@ -766,19 +1037,13 @@ $process_history = fetchProcessHistory($conn);
 
         function saveBatch(e, form) {
             e.preventDefault();
-            const lossText = form.querySelector('.loss-val').innerText;
-            const loss = parseFloat(lossText);
-
-            if (loss < -5) {
-                alert("Error: Output Weight is significantly higher than Input Weight. Please verify.");
-                return;
-            }
+            const loss = parseFloat(form.querySelector('.loss-val').innerText);
+            if (loss < -5) return alert("Error: Output Weight is significantly higher than Input Weight. Please verify.");
             if (!confirm("Save outputs and update inventory?")) return;
 
             const btn = form.querySelector('button');
             btn.innerHTML = 'Saving...';
             btn.disabled = true;
-
             fetch('process_raw_material.php', {
                     method: 'POST',
                     body: new FormData(form)
@@ -793,28 +1058,34 @@ $process_history = fetchProcessHistory($conn);
                 });
         }
 
-        // --- DYNAMIC LOADERS & VALIDATION ---
-        document.getElementById('input_qty').addEventListener('input', function() {
-            const select = document.getElementById('seed_select');
-            if (select.selectedIndex <= 0) return;
+        // --- STOCK CHECKING (Quantity change) ---
+        function checkStockQty() {
+            const qtyInput = document.getElementById('input_qty');
+            const seedSelect = document.getElementById('seed_select');
+            const errorMsg = document.getElementById('stock_error');
+            const startBtn = document.getElementById('startBtn');
 
-            const stk = parseFloat(select.selectedOptions[0].getAttribute('data-stock')) || 0;
-            const val = parseFloat(this.value) || 0;
+            if (seedSelect.selectedIndex > 0) {
+                const stk = parseFloat(seedSelect.selectedOptions[0].getAttribute('data-stock')) || 0;
+                const val = parseFloat(qtyInput.value) || 0;
 
-            if (val > stk) {
-                document.getElementById('stock_error').style.display = 'block';
-                document.getElementById('startBtn').disabled = true;
-            } else {
-                document.getElementById('stock_error').style.display = 'none';
-                document.getElementById('startBtn').disabled = false;
+                if (val > stk) {
+                    errorMsg.style.display = 'block';
+                    startBtn.disabled = true;
+                } else {
+                    errorMsg.style.display = 'none';
+                    startBtn.disabled = false;
+                }
             }
-        });
+        }
 
+        document.getElementById('input_qty').addEventListener('input', checkStockQty);
+
+        // SEED CHANGE EVENT
         document.getElementById('seed_select').addEventListener('change', function() {
             const sid = this.value;
-            const qtyInput = document.getElementById('input_qty');
-            qtyInput.value = '';
-            qtyInput.dispatchEvent(new Event('input'));
+
+            checkStockQty();
 
             const gSel = document.getElementById('grn_select');
             if (!sid) {
@@ -838,6 +1109,7 @@ $process_history = fetchProcessHistory($conn);
                 });
         });
 
+        // FORM SUBMIT
         document.getElementById('startForm').addEventListener('submit', function(e) {
             e.preventDefault();
             if (!confirm("Start machine processing?")) return;

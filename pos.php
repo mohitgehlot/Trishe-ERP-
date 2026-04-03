@@ -376,7 +376,64 @@ if ($lowResult) {
                 }
             });
         }
+// --- CUSTOMER AUTOSUGGESTION LOGIC ---
+        let custTimeout = null;
+        
+        function suggestCustomer(term) {
+            const suggBox = document.getElementById('custSuggestions');
+            
+            if (term.length < 2) {
+                suggBox.style.display = 'none';
+                if (term.length === 0) {
+                    document.getElementById('selectedCustId').value = "0"; // Reset ID if empty
+                }
+                return;
+            }
 
+            clearTimeout(custTimeout);
+            custTimeout = setTimeout(() => {
+                const fd = new FormData();
+                fd.append('action', 'search_customer');
+                fd.append('term', term);
+
+                fetch('sales_entry.php', {
+                    method: 'POST',
+                    body: fd
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.length > 0) {
+                        let html = '';
+                        data.forEach(cust => {
+                            // Bachao against special quotes in names
+                            const safeName = cust.value.replace(/'/g, "\\'");
+                            html += `
+                                <div style="padding:10px 15px; border-bottom:1px solid var(--border); cursor:pointer; transition:0.2s;" 
+                                     onmouseover="this.style.background='#f1f5f9'" 
+                                     onmouseout="this.style.background='transparent'"
+                                     onclick="selectCustomer(${cust.id}, '${safeName}', '${cust.phone}')">
+                                    <strong style="color:var(--text-main);">${cust.value}</strong><br>
+                                    <small style="color:var(--text-muted);"><i class="fas fa-phone" style="font-size:10px; margin-right:4px;"></i>${cust.phone || 'No Number'}</small>
+                                </div>`;
+                        });
+                        suggBox.innerHTML = html;
+                        suggBox.style.display = 'block';
+                    } else {
+                        suggBox.innerHTML = '<div style="padding:15px; color:var(--text-muted); font-size:0.9rem; text-align:center;">No customer found. <br><small>Will create new.</small></div>';
+                        suggBox.style.display = 'block';
+                    }
+                }).catch(err => console.log("Suggestion Error:", err));
+            }, 300); // 300ms delay to stop server overload
+        }
+
+        function selectCustomer(id, name, phone) {
+            document.getElementById('selectedCustId').value = id;
+            document.getElementById('custName').value = name;
+            document.getElementById('custPhone').value = phone;
+            document.getElementById('custSearch').value = name; // Update search box
+            
+            document.getElementById('custSuggestions').style.display = 'none';
+        }
         function updateCartDisplay() {
             const container = document.getElementById('cartItems');
             let html = '',

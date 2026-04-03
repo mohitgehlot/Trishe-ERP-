@@ -1,5 +1,5 @@
 <?php
-// grn_intake.php - MASTER CSS INTEGRATED
+// grn_intake.php - MOBILE OVERFLOW BUG FIXED
 include 'config.php';
 session_start();
 
@@ -38,6 +38,11 @@ while ($row = $result->fetch_assoc()) {
     <link rel="stylesheet" href="css/admin_style.css">
 
     <style>
+        body {
+            overflow-x: hidden;
+        }
+
+        /* Extra safety against horizontal scroll */
         .container {
             max-width: 1400px;
             margin: 0 auto;
@@ -74,11 +79,25 @@ while ($row = $result->fetch_assoc()) {
             grid-template-columns: 1fr 1.5fr;
             gap: 24px;
             align-items: start;
+            min-width: 0;
         }
 
+        .grid-layout>div {
+            min-width: 0;
+            /* Prevents grid blowout */
+        }
+
+        /* Fixed Grid Classes for proper mobile stacking */
         .form-grid {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 15px;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
             gap: 16px;
             margin-bottom: 15px;
         }
@@ -176,6 +195,22 @@ while ($row = $result->fetch_assoc()) {
             font-size: 1.2rem;
         }
 
+        /* Desktop Table Styling */
+        .table-wrap {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            border: none;
+            box-shadow: none;
+            border-radius: 0;
+            width: 100%;
+        }
+
+        .table-wrap table {
+            min-width: 600px;
+            width: 100%;
+        }
+
+        /* ================= MOBILE RESPONSIVE FIXES ================= */
         @media (max-width: 1024px) {
             .grid-layout {
                 grid-template-columns: 1fr;
@@ -188,13 +223,16 @@ while ($row = $result->fetch_assoc()) {
             }
 
             .container {
-                padding: 15px;
+                padding: 10px;
+                width: 100vw;
+                max-width: 100vw;
             }
 
             .page-header-box {
                 flex-direction: column;
                 align-items: stretch;
                 text-align: center;
+                padding: 15px;
             }
 
             .page-header-box .btn {
@@ -206,11 +244,109 @@ while ($row = $result->fetch_assoc()) {
                 grid-template-columns: 1fr 1fr;
                 gap: 12px;
             }
+
+            /* Convert 2 columns to 1 column on mobile */
+            .grid-2 {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .card-header {
+                padding: 12px 15px;
+                font-size: 1.1rem;
+                font-weight: 700;
+            }
+
+            .history-stats {
+                flex-direction: column;
+                gap: 5px;
+                text-align: left;
+            }
+
+            /* MAGIC FIX: Override the 600px min-width causing the overflow */
+            .table-wrap table {
+                min-width: 100% !important;
+            }
+
+            /* Table to Card View Magic for Items List */
+            .table-wrap table,
+            .table-wrap thead,
+            .table-wrap tbody,
+            .table-wrap th,
+            .table-wrap td,
+            .table-wrap tr {
+                display: block;
+                width: 100%;
+            }
+
+            .table-wrap thead {
+                display: none;
+            }
+
+            .table-wrap tr {
+                margin-bottom: 15px;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                background: #fff;
+                padding: 10px;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            }
+
+            .table-wrap td {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 10px 5px !important;
+                border-bottom: 1px dashed var(--border) !important;
+                text-align: right;
+            }
+
+            .table-wrap td:last-child {
+                border-bottom: none !important;
+                display: flex;
+                justify-content: flex-end;
+                padding-top: 15px !important;
+            }
+
+            .table-wrap td::before {
+                content: attr(data-label);
+                font-weight: 700;
+                color: var(--text-muted);
+                font-size: 0.75rem;
+                text-transform: uppercase;
+                text-align: left;
+            }
+
+            .table-wrap td:last-child::before {
+                display: none;
+            }
+
+            /* Tfoot handling for Grand Total */
+            .table-wrap tfoot tr {
+                display: flex;
+                flex-direction: column;
+                background: #f8fafc;
+                border-top: 2px solid var(--border);
+            }
+
+            .table-wrap tfoot td {
+                border-bottom: none !important;
+                padding: 10px !important;
+            }
+
+            .table-wrap tfoot td:empty {
+                display: none;
+            }
         }
 
         @media (max-width: 480px) {
             .form-grid {
                 grid-template-columns: 1fr;
+            }
+
+            /* Stack completely on very small screens */
+            .grid-layout {
+                gap: 15px;
             }
         }
     </style>
@@ -236,10 +372,10 @@ while ($row = $result->fetch_assoc()) {
 
                 <div class="left-col">
                     <div class="card" style="margin-bottom: 24px;">
-                        <div class="card-header"><i class="fas fa-user text-primary"></i> Seller Information</div>
+                        <div class="card-header"><i class="fas fa-user text-primary" style="margin-right:8px;"></i> Seller Information</div>
                         <div style="padding: 20px;">
 
-                            <div class="form-group autocomplete-wrapper">
+                            <div class="form-group autocomplete-wrapper" style="margin-bottom:15px;">
                                 <label class="form-label">Seller Name *</label>
                                 <input type="text" id="seller_name" name="seller_name" class="form-input" placeholder="Search seller..." required>
                                 <div id="seller_list" class="autocomplete-list"></div>
@@ -258,18 +394,18 @@ while ($row = $result->fetch_assoc()) {
                                 </div>
                             </div>
 
-                            <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
-                                <div class="form-group">
+                            <div class="grid-2">
+                                <div class="form-group" style="margin:0;">
                                     <label class="form-label">Vehicle No *</label>
                                     <input type="text" id="vehicle_no" name="vehicle_no" class="form-input" placeholder="RJ-XX-0000" required style="text-transform: uppercase;">
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" style="margin:0;">
                                     <label class="form-label">Phone Number</label>
                                     <input type="text" id="phone" name="phone" class="form-input" placeholder="Mobile No" readonly style="background:#f8fafc; color:var(--text-muted);">
                                 </div>
                             </div>
 
-                            <div class="form-group">
+                            <div class="form-group" style="margin-top:15px;">
                                 <label class="form-label">Address</label>
                                 <input type="text" id="seller_address" name="seller_address" class="form-input" placeholder="Village / City" readonly style="background:#f8fafc; color:var(--text-muted);">
                             </div>
@@ -283,10 +419,11 @@ while ($row = $result->fetch_assoc()) {
                     </div>
 
                     <div class="card">
-                        <div class="card-header"><i class="fas fa-wallet text-success"></i> Payment Details</div>
+                        <div class="card-header"><i class="fas fa-wallet text-success" style="margin-right:8px;"></i> Payment Details</div>
                         <div style="padding: 20px;">
-                            <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
-                                <div class="form-group">
+
+                            <div class="grid-2">
+                                <div class="form-group" style="margin:0;">
                                     <label class="form-label">Payment Mode</label>
                                     <select id="payment_mode" name="payment_mode" class="form-input">
                                         <option value="Pending">Credit (Pending)</option>
@@ -296,13 +433,13 @@ while ($row = $result->fetch_assoc()) {
                                         <option value="Cheque">Cheque</option>
                                     </select>
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" style="margin:0;">
                                     <label class="form-label">Date</label>
                                     <input type="date" id="payment_date" name="payment_date" class="form-input" value="<?= date('Y-m-d') ?>">
                                 </div>
                             </div>
 
-                            <div class="form-group">
+                            <div class="form-group" style="margin-top:15px;">
                                 <label class="form-label">Ref No / Remarks</label>
                                 <input type="text" id="payment_ref" name="payment_ref" class="form-input" placeholder="Transaction ID or Notes">
                             </div>
@@ -319,10 +456,10 @@ while ($row = $result->fetch_assoc()) {
                 <div class="right-col">
 
                     <div class="card" style="margin-bottom: 24px;">
-                        <div class="card-header"><i class="fas fa-seedling text-warning"></i> Add Seeds</div>
+                        <div class="card-header"><i class="fas fa-seedling text-warning" style="margin-right:8px;"></i> Add Seeds</div>
                         <div style="padding: 20px;">
 
-                            <div class="form-group autocomplete-wrapper">
+                            <div class="form-group autocomplete-wrapper" style="margin-bottom:15px;">
                                 <label class="form-label">Select Seed (Type to search) *</label>
                                 <input type="text" id="seed_search" class="form-input" placeholder="e.g. Mustard, Peanut...">
                                 <input type="hidden" id="selected_seed_id">
@@ -330,15 +467,15 @@ while ($row = $result->fetch_assoc()) {
                             </div>
 
                             <div class="form-grid">
-                                <div class="form-group">
+                                <div class="form-group" style="margin:0;">
                                     <label class="form-label">Category</label>
                                     <input type="text" id="seed_category" class="form-input" readonly tabindex="-1" style="background:#f8fafc; color:var(--text-muted);">
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" style="margin:0;">
                                     <label class="form-label">Last Price (Ref)</label>
                                     <input type="text" id="last_price" class="form-input" readonly tabindex="-1" style="background:#f8fafc; color:var(--text-muted);">
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" style="margin:0;">
                                     <label class="form-label">Quality Grade</label>
                                     <select id="seed_quality" class="form-input">
                                         <option value="A">Grade A (Best)</option>
@@ -347,15 +484,15 @@ while ($row = $result->fetch_assoc()) {
                                         <option value="D">Grade D (Low)</option>
                                     </select>
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" style="margin:0;">
                                     <label class="form-label">No. of Bags</label>
                                     <input type="number" id="seed_bags" class="form-input" placeholder="0">
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" style="margin:0;">
                                     <label class="form-label">Price (₹/Qtl) *</label>
                                     <input type="number" id="seed_price" class="form-input" step="0.01" placeholder="0.00">
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group" style="margin:0;">
                                     <label class="form-label">Weight (Kg) *</label>
                                     <input type="number" id="seed_weight" class="form-input" step="0.01" placeholder="0.00">
                                 </div>
@@ -366,14 +503,14 @@ while ($row = $result->fetch_assoc()) {
                             </div>
 
                             <button type="button" id="add_item_btn" class="btn btn-outline" style="width:100%; border-color:var(--primary); color:var(--primary); margin-top:10px;">
-                                <i class="fas fa-plus-circle"></i> Add Item to List
+                                <i class="fas fa-plus-circle" style="margin-right:5px;"></i> Add Item to List
                             </button>
 
                         </div>
                     </div>
 
                     <div class="card">
-                        <div class="card-header"><i class="fas fa-list text-info"></i> Items List</div>
+                        <div class="card-header"><i class="fas fa-list text-info" style="margin-right:8px;"></i> Items List</div>
                         <div class="table-wrap" style="border:none; box-shadow:none; border-radius:0;">
                             <table>
                                 <thead>
@@ -393,9 +530,9 @@ while ($row = $result->fetch_assoc()) {
                                 </tbody>
                                 <tfoot>
                                     <tr style="background:#f8fafc; border-top:2px solid var(--border);">
-                                        <td colspan="3" style="text-align:right; font-weight:800;">Grand Total:</td>
-                                        <td id="grand_weight" style="font-weight:700;">0.00 Kg</td>
-                                        <td id="grand_value" style="font-weight:800; color:var(--success);">₹ 0.00</td>
+                                        <td data-label="Total Summary" colspan="3" style="text-align:right; font-weight:800;">Grand Total:</td>
+                                        <td data-label="Total Weight" id="grand_weight" style="font-weight:700;">0.00 Kg</td>
+                                        <td data-label="Grand Amount" id="grand_value" style="font-weight:800; color:var(--success);">₹ 0.00</td>
                                         <td></td>
                                     </tr>
                                 </tfoot>
@@ -404,7 +541,7 @@ while ($row = $result->fetch_assoc()) {
                     </div>
 
                     <button type="submit" id="submit_grn_btn" class="btn btn-primary" style="width:100%; padding:15px; font-size:1.1rem; margin-top:24px; background:var(--success); border-color:var(--success);">
-                        <i class="fas fa-check-circle"></i> Save GRN Entry
+                        <i class="fas fa-check-circle" style="margin-right:8px;"></i> Save GRN Entry
                     </button>
 
                 </div>
@@ -413,7 +550,7 @@ while ($row = $result->fetch_assoc()) {
     </div>
 
     <div id="historyModal" class="global-modal">
-        <div class="g-modal-content" style="max-width: 800px;">
+        <div class="g-modal-content" style="max-width: 800px; padding:0; overflow:hidden;">
             <div class="g-modal-header">
                 <h3 style="margin:0; font-size:1.2rem; color:var(--text-main);"><i class="fas fa-history text-primary" style="margin-right:8px;"></i> Previous Orders: <span id="modal_seller_name" style="color:var(--primary);"></span></h3>
                 <span class="g-close-btn" onclick="closeHistoryModal()">&times;</span>
@@ -578,11 +715,11 @@ while ($row = $result->fetch_assoc()) {
                                 data.history.forEach(row => {
                                     tbody.innerHTML += `
                                         <tr>
-                                            <td style="font-weight:600;">${row.formatted_date}</td>
-                                            <td><strong style="color:var(--primary);">${row.grn_no}</strong></td>
-                                            <td>${row.total_weight_kg} Kg</td>
-                                            <td style="font-weight:700; color:var(--success);">₹${parseFloat(row.total_value).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
-                                            <td style="text-align:right;">
+                                            <td data-label="Date" style="font-weight:600;">${row.formatted_date}</td>
+                                            <td data-label="GRN No"><strong style="color:var(--primary);">${row.grn_no}</strong></td>
+                                            <td data-label="Weight">${row.total_weight_kg} Kg</td>
+                                            <td data-label="Amount" style="font-weight:700; color:var(--success);">₹${parseFloat(row.total_value).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                                            <td data-label="Action" style="text-align:right;">
                                                 <button type="button" class="btn-icon" style="color:var(--info); font-size:1rem;" onclick="printAllStickers(${row.id})" title="Print Stickers">
                                                     <i class="fas fa-tags"></i>
                                                 </button>
@@ -701,7 +838,7 @@ while ($row = $result->fetch_assoc()) {
                 if (e.target !== els.sellerName && e.target !== els.seedSearch) closeLists();
                 if (e.target == document.getElementById('historyModal')) closeHistoryModal();
             });
-            // Also close modal on escape key
+
             document.addEventListener('keydown', function(e) {
                 if (e.key === "Escape") closeHistoryModal();
             });
@@ -762,6 +899,9 @@ while ($row = $result->fetch_assoc()) {
                     els.tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:30px;">No items added</td></tr>`;
                     els.grandWeight.textContent = '0.00 Kg';
                     els.grandValue.textContent = '₹ 0.00';
+                    // Hide pseudo element for Grand total on mobile
+                    let firstFootTd = document.querySelector('tfoot tr td:first-child');
+                    if (firstFootTd) firstFootTd.style.display = "none";
                     return;
                 }
 
@@ -775,12 +915,12 @@ while ($row = $result->fetch_assoc()) {
 
                     const row = `
                         <tr>
-                            <td><strong style="color:var(--text-main);">${item.seed_name}</strong></td>
-                            <td style="color:var(--text-muted); font-size:0.9rem;">${item.bags} Bags (${item.quality})</td>
-                            <td style="font-weight:600;">₹${item.price_per_qtl}</td>
-                            <td style="font-weight:600;">${item.weight_kg} Kg</td>
-                            <td style="font-weight:700; color:var(--text-main);">₹${item.line_value.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
-                            <td style="text-align:right;">
+                            <td data-label="Item"><strong style="color:var(--text-main);">${item.seed_name}</strong></td>
+                            <td data-label="Details" style="color:var(--text-muted); font-size:0.9rem;">${item.bags} Bags (${item.quality})</td>
+                            <td data-label="Rate" style="font-weight:600;">₹${item.price_per_qtl}</td>
+                            <td data-label="Weight" style="font-weight:600;">${item.weight_kg} Kg</td>
+                            <td data-label="Total" style="font-weight:700; color:var(--text-main);">₹${item.line_value.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                            <td data-label="Action" style="text-align:right;">
                                 <button type="button" class="btn-icon delete" onclick="removeItem(${idx})" title="Remove"><i class="fas fa-trash"></i></button>
                             </td>
                         </tr>
@@ -792,6 +932,13 @@ while ($row = $result->fetch_assoc()) {
                 els.grandValue.textContent = '₹ ' + gV.toLocaleString('en-IN', {
                     minimumFractionDigits: 2
                 });
+
+                // Show pseudo element for Grand total on mobile
+                if (window.innerWidth <= 768) {
+                    let firstFootTd = document.querySelector('tfoot tr td:first-child');
+                    if (firstFootTd) firstFootTd.style.display = "block";
+                }
+
                 document.getElementById('items_json').value = JSON.stringify(addedItems);
             }
 
