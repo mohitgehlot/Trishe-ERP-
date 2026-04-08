@@ -9,19 +9,18 @@ if (!isset($_SESSION['admin_id'])) {
 
 $current_page = basename($_SERVER['PHP_SELF']);
 
-// Function to check if a single page is active
 function isChildActive($page)
 {
     global $current_page;
     return $current_page === $page ? 'active-child' : '';
 }
 
-// Function to check if a Parent Menu should be open
 function isParentOpen($pages_array)
 {
     global $current_page;
     return in_array($current_page, $pages_array) ? 'open' : '';
 }
+
 $global_seeds = [];
 $res_s = $conn->query("SELECT id, name, current_stock as available_quantity FROM seeds_master WHERE current_stock > 0 ORDER BY name");
 if ($res_s) while ($row = $res_s->fetch_assoc()) $global_seeds[] = $row;
@@ -30,10 +29,11 @@ $global_machines = [];
 $res_m = $conn->query("SELECT id, name, model FROM machines WHERE is_active = 1");
 if ($res_m) while ($row = $res_m->fetch_assoc()) $global_machines[] = $row;
 if (empty($global_machines)) $global_machines[] = ['id' => 1, 'name' => 'Expeller 1', 'model' => 'Default'];
+
 $global_pack_list = [];
 $res_pack_global = $conn->query("SELECT id, item_name as name FROM inventory_packaging ORDER BY item_name");
 if ($res_pack_global) while ($row = $res_pack_global->fetch_assoc()) $global_pack_list[] = $row;
-// Fetch Vendors for the Expense Form
+
 $global_vendor_list = [];
 $res_ven_global = $conn->query("SELECT id, name FROM sellers ORDER BY name ASC");
 if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendor_list[] = $row;
@@ -44,31 +44,19 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="icon" type="image/png" href="images/favicon-32x32.png">
+    <link rel="icon" type="image/png" href="images/favicon-32x32.png">
     <style>
-        /* ========================
-           1. MODERN VARIABLES
-           ======================== */
         :root {
-            /* Image Design Colors */
             --sidebar-bg: #f4f4f5;
-            /* Light Gray Background */
             --active-card-bg: #ffffff;
-            /* White Active Item */
             --text-main: #18181b;
-            /* Nearly Black */
             --text-muted: #71717a;
-            /* Gray Text */
             --line-color: #d4d4d8;
-            /* Tree Connector Lines */
             --accent-blue: #3b82f6;
             --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
             --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-
-            /* Badges */
             --badge-orange: #f97316;
             --badge-green: #10b981;
         }
@@ -93,9 +81,6 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
             margin: 0;
         }
 
-        /* ========================
-           2. SIDEBAR STYLES
-           ======================== */
         .sidebar {
             width: 260px;
             background-color: var(--sidebar-bg);
@@ -112,7 +97,6 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
             transition: transform 0.3s ease;
         }
 
-        /* Logo Area */
         .brand {
             display: flex;
             align-items: center;
@@ -141,7 +125,6 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
             letter-spacing: -0.5px;
         }
 
-        /* Menu Items */
         .menu-label {
             font-size: 11px;
             font-weight: 600;
@@ -177,13 +160,11 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
             font-size: 16px;
         }
 
-        /* Hover State */
         .nav-link:hover {
             color: var(--text-main);
             background-color: rgba(0, 0, 0, 0.03);
         }
 
-        /* Active Single Link (Dashboard) */
         .nav-link.active-child {
             background-color: var(--active-card-bg);
             color: var(--text-main);
@@ -191,7 +172,6 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
             box-shadow: var(--shadow-sm);
         }
 
-        /* Dropdown Arrow */
         .arrow {
             font-size: 10px;
             transition: transform 0.3s;
@@ -206,14 +186,10 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
             color: var(--text-main);
         }
 
-        /* ========================
-           3. TREE VIEW SUBMENU
-           ======================== */
         .submenu {
             display: none;
             flex-direction: column;
             padding-left: 21px;
-            /* Align with parent icon center */
             margin-top: 5px;
             position: relative;
         }
@@ -222,14 +198,12 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
             display: flex;
         }
 
-        /* Main Vertical Line */
         .submenu::before {
             content: '';
             position: absolute;
             left: 21px;
             top: 0;
             bottom: 18px;
-            /* Stop before last item */
             width: 2px;
             background-color: var(--line-color);
         }
@@ -238,7 +212,6 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
             position: relative;
             padding: 8px 12px 8px 16px;
             margin-left: 12px;
-            /* Push right from line */
             font-size: 13px;
             color: var(--text-muted);
             border-radius: 8px;
@@ -248,44 +221,35 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
             transition: 0.2s;
         }
 
-        /* Horizontal Connector Line (Curved) */
         .sub-item::before {
             content: '';
             position: absolute;
             left: -13px;
-            /* Touch vertical line */
             top: -10px;
-            /* Start from top */
             height: 28px;
-            /* Go down to center of text */
             width: 12px;
             border-bottom: 2px solid var(--line-color);
             border-left: 2px solid var(--line-color);
             border-bottom-left-radius: 10px;
-            /* Curve effect */
         }
 
-        /* Fix first item line connection */
         .submenu .sub-item:first-child::before {
             height: 30px;
             top: -12px;
         }
 
-        /* Active Sub Item (White Card Look) */
         .sub-item.active-child {
             background-color: var(--active-card-bg);
             color: var(--text-main);
             font-weight: 600;
             box-shadow: var(--shadow-sm);
             z-index: 2;
-            /* Sit on top of lines */
         }
 
         .sub-item:hover {
             color: var(--text-main);
         }
 
-        /* Badges */
         .badge {
             padding: 2px 8px;
             border-radius: 10px;
@@ -302,9 +266,6 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
             background: var(--badge-green);
         }
 
-        /* ========================
-           4. MOBILE RESPONSIVE
-           ======================== */
         .mobile-header {
             display: none;
             position: fixed;
@@ -336,10 +297,8 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
             display: block;
         }
 
-        /* Main Content Pusher */
         .main-content-wrapper {
             margin-left: 260px;
-
             width: calc(100% - 260px);
             min-height: 100vh;
         }
@@ -416,7 +375,6 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                             <span>Account Dashboard</span>
                         </a>
                     </li>
-
                 </ul>
             </li>
 
@@ -441,7 +399,8 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                     <li>
                         <a href="inventory.php" class="sub-item <?= isChildActive('inventory.php') ?>">
                             <span>Stock / GRN</span>
-                            <span class="badge bg-orange">3</span> </a>
+                            <span class="badge bg-orange">3</span>
+                        </a>
                     </li>
                     <li>
                         <a href="process_raw_material.php" class="sub-item <?= isChildActive('process_raw_material.php') ?>">
@@ -458,7 +417,7 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
             </li>
 
             <?php
-            $sale_pages = ['admin_customers.php', 'admin_orders.php', 'pos.php', 'costing.php', 'forecasting.php'];
+            $sale_pages = ['admin_customers.php', 'admin_orders.php', 'online_orders.php', 'import_orders.php', 'pos.php', 'costing.php', 'forecasting.php'];
             $sale_open = isParentOpen($sale_pages);
             ?>
             <li>
@@ -470,34 +429,30 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                     <i class="fas fa-chevron-down arrow"></i>
                 </div>
                 <ul class="submenu <?= $sale_open ? 'show' : '' ?>">
+                    <li><a href="admin_customers.php" class="sub-item <?= isChildActive('admin_customers.php') ?>"><span>Customers</span></a></li>
+
+                    <?php
+                    $order_pages = ['admin_orders.php', 'online_orders.php', 'import_orders.php'];
+                    $is_order_active = in_array($current_page, $order_pages) ? 'open active-child' : '';
+                    $is_order_show = in_array($current_page, $order_pages) ? 'show' : '';
+                    ?>
                     <li>
-                        <a href="admin_customers.php" class="sub-item <?= isChildActive('admin_customers.php') ?>">
-                            <span>Customers</span>
-                        </a>
+                        <div class="sub-item nav-link <?= $is_order_active ?>" onclick="toggleMenu(this)" style="border:none; margin-bottom:0; width:auto;">
+                            <span>Orders Menu</span>
+                            <i class="fas fa-chevron-down arrow"></i>
+                        </div>
+                        <ul class="submenu <?= $is_order_show ?>" style="padding-left: 20px; margin-top: 0;">
+                            <li><a href="admin_orders.php" class="sub-item <?= isChildActive('admin_orders.php') ?>"><span>All Orders</span></a></li>
+                            <li><a href="online_orders.php" class="sub-item <?= isChildActive('online_orders.php') ?>"><span>Online Orders</span></a></li>
+                            <li><a href="import_orders.php" class="sub-item <?= isChildActive('import_orders.php') ?>"><span>Previous Orders</span></a></li>
+                        </ul>
                     </li>
-                    <li>
-                        <a href="admin_orders.php" class="sub-item <?= isChildActive('admin_orders.php') ?>">
-                            <span>Orders</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="pos.php" class="sub-item <?= isChildActive('pos.php') ?>">
-                            <span>POS Billing</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="costing.php" class="sub-item <?= isChildActive('costing.php') ?>">
-                            <span>Costing</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="forecasting.php" class="sub-item <?= isChildActive('forecasting.php') ?>">
-                            <span>Product Recipes</span>
-                        </a>
-                    </li>
+
+                    <li><a href="pos.php" class="sub-item <?= isChildActive('pos.php') ?>"><span>POS Billing</span></a></li>
+                    <li><a href="costing.php" class="sub-item <?= isChildActive('costing.php') ?>"><span>Costing</span></a></li>
+                    <li><a href="forecasting.php" class="sub-item <?= isChildActive('forecasting.php') ?>"><span>Product Recipes</span></a></li>
                 </ul>
             </li>
-
             <?php
             $rep_pages = ['expenses.php', 'admin_reports.php', 'financial_analytics.php'];
             $rep_open = isParentOpen($rep_pages);
@@ -511,22 +466,9 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                     <i class="fas fa-chevron-down arrow"></i>
                 </div>
                 <ul class="submenu <?= $rep_open ? 'show' : '' ?>">
-                    <li>
-                        <a href="expenses.php" class="sub-item <?= isChildActive('expenses.php') ?>">
-                            <span>Expenses</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="admin_reports.php" class="sub-item <?= isChildActive('admin_reports.php') ?>">
-                            <span>Admin Reports</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="financial_analytics.php" class="sub-item <?= isChildActive('financial_analytics.php') ?>">
-                            <span>Financial Analytics</span>
-                        </a>
-                    </li>
-
+                    <li><a href="expenses.php" class="sub-item <?= isChildActive('expenses.php') ?>"><span>Expenses</span></a></li>
+                    <li><a href="admin_reports.php" class="sub-item <?= isChildActive('admin_reports.php') ?>"><span>Admin Reports</span></a></li>
+                    <li><a href="financial_analytics.php" class="sub-item <?= isChildActive('financial_analytics.php') ?>"><span>Financial Analytics</span></a></li>
                 </ul>
             </li>
 
@@ -538,6 +480,7 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                     </div>
                 </a>
             </li>
+
             <?php
             $rep_pages = ['admin_users.php', 'daily_prices.php', 'print_builder.php', 'profile.php'];
             $rep_open = isParentOpen($rep_pages);
@@ -551,29 +494,13 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                     <i class="fas fa-chevron-down arrow"></i>
                 </div>
                 <ul class="submenu <?= $rep_open ? 'show' : '' ?>">
-                    <li>
-                        <a href="admin_users.php" class="sub-item <?= isChildActive('admin_users.php') ?>">
-                            <span>Users</span>
-                        </a>
-                    </li>
-
-                    <li>
-                        <a href="daily_prices.php" class="sub-item <?= isChildActive('daily_prices.php') ?>">
-                            <span>Daily Prices</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="print_builder.php" class="sub-item <?= isChildActive('print_builder.php') ?>">
-                            <span>Print Builder</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="profile.php" class="sub-item <?= isChildActive('profile.php') ?>">
-                            <span>Profile</span>
-                        </a>
-                    </li>
+                    <li><a href="admin_users.php" class="sub-item <?= isChildActive('admin_users.php') ?>"><span>Users</span></a></li>
+                    <li><a href="daily_prices.php" class="sub-item <?= isChildActive('daily_prices.php') ?>"><span>Daily Prices</span></a></li>
+                    <li><a href="print_builder.php" class="sub-item <?= isChildActive('print_builder.php') ?>"><span>Print Builder</span></a></li>
+                    <li><a href="profile.php" class="sub-item <?= isChildActive('profile.php') ?>"><span>Profile</span></a></li>
                 </ul>
             </li>
+
             <li style="margin-top: 20px; border-top:1px solid #eee; padding-top:10px;">
                 <a href="logout.php" class="nav-link" style="color: #ef4444;">
                     <div class="nav-content">
@@ -585,6 +512,7 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
 
         </ul>
     </aside>
+
     <div id="globalCreateModal" class="global-modal">
         <div class="g-modal-content">
             <div class="g-modal-header">
@@ -596,7 +524,6 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
             <div class="g-modal-body">
                 <form id="globalCreateProdForm">
                     <input type="hidden" name="action" value="create_new_product">
-
                     <div class="form-group" style="margin-bottom:20px;">
                         <label class="form-label">1. Oil Type (Seed)</label>
                         <select name="n_seed" id="gc_seed" class="form-input" required>
@@ -606,7 +533,6 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                             <?php endforeach; ?>
                         </select>
                     </div>
-
                     <div style="background:#f8fafc; padding:20px; border-radius:8px; border:1px solid var(--border); margin-bottom:20px;">
                         <label style="color:var(--text-main); font-weight:700; margin-bottom:15px; display:block;">2. Single Item Specification</label>
                         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
@@ -633,7 +559,6 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                             </div>
                         </div>
                     </div>
-
                     <div class="form-group" style="margin-bottom:20px;">
                         <label class="form-label">3. Select Empty Container Material</label>
                         <select name="n_packing_material" class="form-input" required>
@@ -643,7 +568,6 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                             <?php endforeach; ?>
                         </select>
                     </div>
-
                     <div class="form-group" style="margin-bottom:20px; border-left:4px solid var(--warning); padding-left:15px; background:#fffbeb; padding:15px; border-radius:0 8px 8px 0;">
                         <label class="form-label" style="color:var(--warning);">4. Is this a Combo Pack?</label>
                         <div style="display:flex; align-items:center; gap:15px;">
@@ -651,7 +575,6 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                             <span style="color:var(--text-muted); font-size:0.9rem; font-weight:600;">Items per pack (Change to 2 for "1+1 Combo")</span>
                         </div>
                     </div>
-
                     <button type="submit" id="gc_submitBtn" class="btn btn-primary" style="width:100%; padding:12px; font-size:1.1rem;">
                         <i class="fas fa-save"></i> Create & Save Product
                     </button>
@@ -659,6 +582,7 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
             </div>
         </div>
     </div>
+
     <div id="globalStartModal" class="global-modal">
         <div class="g-modal-content" style="max-width:450px;">
             <div class="g-modal-header">
@@ -671,7 +595,6 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                 <form id="globalStartForm">
                     <input type="hidden" name="action" value="start_process">
                     <input type="hidden" name="start_process" value="1">
-
                     <div class="form-group" style="margin-bottom:15px;">
                         <label style="display:block; font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:5px; text-transform:uppercase;">Raw Material (Seed)</label>
                         <select id="global_seed_select" name="seed_id" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:6px; outline:none; background:#fff;" required>
@@ -683,14 +606,12 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                             <?php endforeach; ?>
                         </select>
                     </div>
-
                     <div class="form-group" style="margin-bottom:15px;">
                         <label style="display:block; font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:5px; text-transform:uppercase;">Linked GRN (Optional)</label>
                         <select id="global_grn_select" name="linked_grn_no" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:6px; outline:none; background:#fff;">
                             <option value="">-- Auto / Any --</option>
                         </select>
                     </div>
-
                     <div class="form-group" style="margin-bottom:15px;">
                         <label style="display:block; font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:5px; text-transform:uppercase;">Select Machine</label>
                         <select name="machine_id" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:6px; outline:none; background:#fff;" required>
@@ -699,13 +620,11 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                             <?php endforeach; ?>
                         </select>
                     </div>
-
                     <div class="form-group" style="margin-bottom:0;">
                         <label style="display:block; font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:5px; text-transform:uppercase;">Input Quantity (Kg)</label>
                         <input type="number" id="global_input_qty" name="seed_qty" step="0.01" placeholder="Weight in Kg" required style="width:100%; padding:10px; border:1px solid var(--border); border-radius:6px; outline:none;">
                         <small id="global_stock_error" style="color:var(--danger); display:none; font-weight:600; margin-top:8px;">⚠️ Insufficient Stock!</small>
                     </div>
-
                     <button type="submit" id="globalStartBtn" style="width:100%; margin-top:20px; padding:12px; background:var(--warning); color:#fff; border:none; border-radius:6px; font-weight:700; cursor:pointer; font-size:1rem; transition:0.2s;">
                         <i class="fas fa-power-off"></i> Start Machine
                     </button>
@@ -713,6 +632,7 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
             </div>
         </div>
     </div>
+
     <div id="globalExpenseModal" class="global-modal">
         <div class="g-modal-content" style="max-width: 700px;">
             <div class="g-modal-header">
@@ -725,6 +645,9 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                 <form id="globalExpenseForm" enctype="multipart/form-data">
                     <input type="hidden" name="action" value="save_global_expense">
 
+                    <input type="hidden" name="expense_id" value="">
+                    <input type="hidden" name="existing_bill" value="">
+
                     <h4 style="font-size:12px; text-transform:uppercase; color:var(--primary); margin-bottom:10px;">Basic Info</h4>
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">
                         <div class="form-group" style="margin:0;">
@@ -733,24 +656,24 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                         </div>
                         <div class="form-group" style="margin:0;">
                             <label class="form-label">Category</label>
-                            <select name="category" class="form-input">
+                            <select name="category" class="form-input" required>
                                 <optgroup label="Production">
-                                    <option>Raw Material</option>
-                                    <option>Packing Material</option>
-                                    <option>Labor</option>
-                                    <option>Fuel (Diesel/Wood)</option>
+                                    <option value="Raw Material">Raw Material</option>
+                                    <option value="Packing Material">Packing Material</option>
+                                    <option value="Labor">Labor</option>
+                                    <option value="Fuel">Fuel (Diesel/Wood)</option>
                                 </optgroup>
                                 <optgroup label="Factory Overheads">
-                                    <option>Electricity Bill</option>
-                                    <option>Factory Rent</option>
-                                    <option>Water Bill</option>
-                                    <option>Maintenance & Repair</option>
+                                    <option value="Electricity Bill">Electricity Bill</option>
+                                    <option value="Factory Rent">Factory Rent</option>
+                                    <option value="Water Bill">Water Bill</option>
+                                    <option value="Maintenance">Maintenance & Repair</option>
                                 </optgroup>
                                 <optgroup label="Others">
-                                    <option>Transport</option>
-                                    <option>Salary (Staff)</option>
-                                    <option>Tea/Snacks (Office)</option>
-                                    <option>Other</option>
+                                    <option value="Transport">Transport</option>
+                                    <option value="Salary (Staff)">Salary (Staff)</option>
+                                    <option value="Tea/Snacks (Office)">Tea/Snacks (Office)</option>
+                                    <option value="Other">Other</option>
                                 </optgroup>
                             </select>
                         </div>
@@ -802,10 +725,10 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                         <div class="form-group" style="margin:0;">
                             <label class="form-label">Payment Mode</label>
                             <select name="payment_mode" class="form-input">
-                                <option>Cash</option>
-                                <option>UPI</option>
-                                <option>Bank Transfer</option>
-                                <option>Cheque</option>
+                                <option value="Cash">Cash</option>
+                                <option value="UPI">UPI</option>
+                                <option value="Bank Transfer">Bank Transfer</option>
+                                <option value="Cheque">Cheque</option>
                             </select>
                         </div>
                         <div class="form-group" style="margin:0;">
@@ -853,6 +776,7 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
             </div>
         </div>
     </div>
+
     <div class="main-content-wrapper">
 
         <script>
@@ -866,13 +790,33 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                     e.preventDefault();
                     openGlobalVendorModal();
                 }
+                if (e.altKey && (e.key === 'c' || e.key === 'C')) {
+                    e.preventDefault();
+                    openGlobalCreateModal();
+                }
+                if (e.altKey && (e.key === 'b' || e.key === 'B')) {
+                    e.preventDefault();
+                    openGlobalStartModal();
+                }
                 if (e.key === "Escape") {
                     closeGlobalExpenseModal();
                     closeGlobalVendorModal();
+                    closeGlobalCreateModal();
+                    closeGlobalStartModal();
                 }
             });
 
+            // 🌟 FIX: SMART MODAL OPENING (RESETS DATA) 🌟
             function openGlobalExpenseModal() {
+                const form = document.getElementById('globalExpenseForm');
+                if (form) {
+                    form.reset();
+                    form.querySelector('input[name="expense_id"]').value = '';
+                    form.querySelector('input[name="existing_bill"]').value = '';
+                }
+                const title = document.querySelector('#globalExpenseModal .g-modal-header h3');
+                if (title) title.innerHTML = '<i class="fas fa-file-invoice-dollar text-primary" style="margin-right:8px;"></i> Add New Expense';
+
                 document.getElementById('globalExpenseModal').classList.add('active');
                 document.getElementById('g_exp_amount').focus();
             }
@@ -890,10 +834,30 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                 document.getElementById('globalVendorModal').classList.remove('active');
             }
 
+            function openGlobalCreateModal() {
+                document.getElementById('globalCreateModal').classList.add('active');
+                document.getElementById('gc_seed').focus();
+            }
+
+            function closeGlobalCreateModal() {
+                document.getElementById('globalCreateModal').classList.remove('active');
+            }
+
+            function openGlobalStartModal() {
+                document.getElementById('globalStartModal').classList.add('active');
+                document.getElementById('global_input_qty').focus();
+            }
+
+            function closeGlobalStartModal() {
+                document.getElementById('globalStartModal').classList.remove('active');
+            }
+
             // Close on outside click
             window.addEventListener('click', function(e) {
                 if (e.target == document.getElementById('globalExpenseModal')) closeGlobalExpenseModal();
                 if (e.target == document.getElementById('globalVendorModal')) closeGlobalVendorModal();
+                if (e.target == document.getElementById('globalCreateModal')) closeGlobalCreateModal();
+                if (e.target == document.getElementById('globalStartModal')) closeGlobalStartModal();
             });
 
             // --- AJAX SUBMITS ---
@@ -950,46 +914,14 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                         btn.disabled = false;
                     });
             });
-            document.addEventListener('keydown', function(e) {
-                // Alt + C dabane par "Create Size" modal khulega
-                if (e.altKey && (e.key === 'c' || e.key === 'C')) {
-                    e.preventDefault();
-                    openGlobalCreateModal();
-                }
 
-                // Escape dabane par dono global modals band ho jayenge
-                if (e.key === "Escape") {
-                    closeGlobalCreateModal();
-                    if (typeof closeGlobalStartModal === 'function') closeGlobalStartModal();
-                }
-            });
-
-            function openGlobalCreateModal() {
-                document.getElementById('globalCreateModal').classList.add('active');
-                document.getElementById('gc_seed').focus(); // Focus on first field
-            }
-
-            function closeGlobalCreateModal() {
-                document.getElementById('globalCreateModal').classList.remove('active');
-            }
-
-            // Modal ke bahar click karne par band karein
-            window.addEventListener('click', function(e) {
-                if (e.target == document.getElementById('globalCreateModal')) {
-                    closeGlobalCreateModal();
-                }
-            });
-
-            // --- FORM SUBMIT LOGIC FOR CREATE SIZE ---
             document.getElementById('globalCreateProdForm').addEventListener('submit', function(e) {
                 e.preventDefault();
-
                 const btn = document.getElementById('gc_submitBtn');
                 const originalText = btn.innerHTML;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
                 btn.disabled = true;
 
-                // Data packaging.php ko bheja jayega (Kyunki wahan iska backend code hai)
                 fetch('packaging.php', {
                         method: 'POST',
                         body: new FormData(this)
@@ -998,7 +930,6 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                     .then(res => {
                         if (res.success) {
                             alert("New Packaging Size Created Successfully!");
-                            // Success hone par user ko directly packaging.php par le jayenge
                             window.location.href = 'packaging.php';
                         } else {
                             alert("Error: " + res.error);
@@ -1010,34 +941,6 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                         btn.innerHTML = originalText;
                         btn.disabled = false;
                     });
-            });
-            // --- GLOBAL SHORTCUT KEY (Alt + B) ---
-            document.addEventListener('keydown', function(e) {
-                // Alt + B dabane par modal khulega
-                if (e.altKey && (e.key === 'b' || e.key === 'B')) {
-                    e.preventDefault();
-                    openGlobalStartModal();
-                }
-                // Escape dabane par band hoga
-                if (e.key === "Escape") {
-                    closeGlobalStartModal();
-                }
-            });
-
-            function openGlobalStartModal() {
-                document.getElementById('globalStartModal').classList.add('active');
-                document.getElementById('global_input_qty').focus(); // Khulte hi typing shuru
-            }
-
-            function closeGlobalStartModal() {
-                document.getElementById('globalStartModal').classList.remove('active');
-            }
-
-            // Modal ke bahar click karne par band karein
-            window.addEventListener('click', function(e) {
-                if (e.target == document.getElementById('globalStartModal')) {
-                    closeGlobalStartModal();
-                }
             });
 
             // --- DYNAMIC STOCK & GRN LOGIC ---
@@ -1074,7 +977,6 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                 fd.append('action', 'get_grn_batches');
                 fd.append('seed_id', sid);
 
-                // Request directly to process_raw_material.php
                 fetch('process_raw_material.php', {
                         method: 'POST',
                         body: fd
@@ -1088,7 +990,6 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                     });
             });
 
-            // --- FORM SUBMIT LOGIC ---
             document.getElementById('globalStartForm').addEventListener('submit', function(e) {
                 e.preventDefault();
                 if (!confirm("Start machine processing?")) return;
@@ -1104,7 +1005,7 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                     .then(r => r.json()).then(res => {
                         if (res.success) {
                             alert("Batch Started Successfully!");
-                            window.location.href = 'process_raw_material.php'; // Start hone par us page pe bhej dega
+                            window.location.href = 'process_raw_material.php';
                         } else {
                             alert("Error: " + res.error);
                             btn.innerHTML = '<i class="fas fa-power-off"></i> Start Machine';
@@ -1117,10 +1018,7 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
             });
 
             function toggleMenu(element) {
-                // Toggle 'open' class for arrow rotation
                 element.classList.toggle('open');
-
-                // Toggle submenu visibility
                 const submenu = element.nextElementSibling;
                 if (submenu.classList.contains('show')) {
                     submenu.classList.remove('show');

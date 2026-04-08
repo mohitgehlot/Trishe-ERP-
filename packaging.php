@@ -1,5 +1,5 @@
 <?php
-// packaging.php - STRICT ROLLBACK & MASTER CSS SYNCED
+// packaging.php - STRICT ROLLBACK & MASTER CSS SYNCED (Create Size Removed)
 ob_start();
 include 'config.php';
 session_start();
@@ -98,61 +98,6 @@ if (isset($_POST['action'])) {
         }
         exit;
     }
-
-    // --- ACTION: CREATE NEW PRODUCT CONFIG ---
-    if ($_POST['action'] == 'create_new_product') {
-        try {
-            $seed_id = intval($_POST['n_seed']);
-            $pack_mat_id = intval($_POST['n_packing_material']);
-            $size_val = floatval($_POST['n_size']);
-            $size_unit = $_POST['n_unit'];
-            $container_type = $_POST['n_type'];
-
-            $multiplier = intval($_POST['n_multiplier'] ?? 1);
-            if ($multiplier < 1) $multiplier = 1;
-
-            $s_name = $conn->query("SELECT name FROM seeds_master WHERE id=$seed_id")->fetch_assoc()['name'];
-
-            if ($multiplier > 1) {
-                $final_prod_name = "$s_name Oil - {$multiplier}x$size_val$size_unit Combo $container_type";
-            } else {
-                $final_prod_name = "$s_name Oil - $size_val$size_unit $container_type";
-            }
-
-            $base_weight_kg = ($size_unit == 'ml') ? ($size_val / 1000) * 0.910 : (($size_unit == 'L') ? $size_val * 0.910 : $size_val);
-            $total_oil_weight_kg = $base_weight_kg * $multiplier;
-
-            $db_unit = ($size_unit == 'Kg') ? 'KG' : 'Liter';
-            $barcode = "TRISHE-" . time() . rand(10, 99);
-
-            $conn->begin_transaction();
-
-            // 1. Create the Main Product
-            $stmt = $conn->prepare("INSERT INTO products (name, weight, unit, seed_id, is_active, barcode, product_type) VALUES (?, ?, ?, ?, 1, ?, 'oil')");
-            $stmt->bind_param("sdsis", $final_prod_name, $total_oil_weight_kg, $db_unit, $seed_id, $barcode);
-            $stmt->execute();
-
-            $new_product_id = $stmt->insert_id;
-
-            // 🌟 FIX: 2. Add Empty Tin to Recipe 🌟
-            $stmtRecPack = $conn->prepare("INSERT INTO product_recipes (raw_material_id, packaging_id, item_type, qty_needed) VALUES (?, ?, 'PACKING', ?)");
-            $stmtRecPack->bind_param("iii", $new_product_id, $pack_mat_id, $multiplier);
-            $stmtRecPack->execute();
-
-            // 🌟 FIX: 3. Add Raw Oil to Recipe 🌟
-            // Here 'packaging_id' stores the Seed ID when item_type is 'OIL'
-            $stmtRecOil = $conn->prepare("INSERT INTO product_recipes (raw_material_id, packaging_id, item_type, qty_needed) VALUES (?, ?, 'OIL', ?)");
-            $stmtRecOil->bind_param("iid", $new_product_id, $seed_id, $total_oil_weight_kg);
-            $stmtRecOil->execute();
-
-            $conn->commit();
-            echo json_encode(['success' => true, 'message' => "New Product Created Successfully!"]);
-        } catch (Exception $e) {
-            $conn->rollback();
-            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
-        }
-        exit;
-    }
 }
 
 // ==========================================
@@ -188,7 +133,7 @@ if (isset($_POST['save_production'])) {
         // 🌟 STEP 1: DEDUCT LOOSE OIL
         $stmtOil = $conn->prepare("INSERT INTO raw_material_inventory (seed_id, product_type, batch_no, quantity, unit, transaction_type, source_type, notes, transaction_date, created_by) VALUES (?, 'OIL', ?, ?, 'KG', 'RAW_OUT', 'PRODUCTION', 'Used for Batch $batch_no', NOW(), ?)");
         if (!$stmtOil) throw new Exception("Database prepare error (Oil).");
-        
+
         $stmtOil->bind_param("isdi", $seed_id, $batch_no, $oil_to_deduct, $admin_id);
         if (!$stmtOil->execute()) {
             throw new Exception("Failed to deduct Loose Oil: " . $stmtOil->error);
@@ -208,10 +153,9 @@ if (isset($_POST['save_production'])) {
         }
 
         // 🌟 STEP 3: ADD FINISHED GOODS
-        // Changed to 'PRODUCTION_OUTPUT' so POS query matches it 100%
         $stmtFG = $conn->prepare("INSERT INTO inventory_products (product_id, batch_no, qty, unit, mfg_date, created_at, transaction_type) VALUES (?, ?, ?, 'Pcs', ?, NOW(), 'PRODUCTION')");
         if (!$stmtFG) throw new Exception("Database prepare error (Finished Goods).");
-        
+
         $stmtFG->bind_param("isis", $prod_id, $batch_no, $qty, $mfg_date);
         if (!$stmtFG->execute()) {
             throw new Exception("Failed to save Packed Bottles in stock: " . $stmtFG->error);
@@ -220,7 +164,6 @@ if (isset($_POST['save_production'])) {
         // 🌟 FINAL STEP: ALL GOOD, SAVE IT! (Commit)
         $conn->commit();
         echo json_encode(['success' => true, 'message' => "Production successfully saved & stock accurately updated!"]);
-
     } catch (Exception $e) {
         // 🌟 REVERT EVERYTHING (Rollback) agar Exception hit hua
         $conn->rollback();
@@ -235,9 +178,6 @@ if (isset($_POST['save_production'])) {
 $products = [];
 $res = $conn->query("SELECT p.id, p.name, p.weight, p.seed_id FROM products p WHERE p.is_active = 1 AND p.product_type = 'oil' ORDER BY p.name");
 if ($res) while ($r = $res->fetch_assoc()) $products[] = $r;
-
-$seeds_list = $conn->query("SELECT id, name FROM seeds_master ORDER BY name");
-$pack_list = $conn->query("SELECT id, item_name as name FROM inventory_packaging ORDER BY item_name");
 
 $saved_sizes = [];
 $sql_sizes = "
@@ -292,6 +232,21 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
             gap: 15px;
         }
 
+        .page-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin: 0;
+        }
+
+        .grid-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 30px;
+            align-items: start;
+        }
+
         .form-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -338,7 +293,6 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
             font-weight: 700;
         }
 
-        /* Fix Table Horizontal Scroll */
         .table-wrap table {
             min-width: 100% !important;
         }
@@ -367,6 +321,10 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
                 grid-template-columns: 1fr;
                 gap: 15px;
             }
+
+            .grid-layout {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -385,115 +343,108 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
 
         <div class="page-header-box">
             <h1 class="page-title" style="margin:0; font-size:1.5rem; font-weight:700;"><i class="fas fa-box-open text-primary" style="margin-right:8px;"></i> Daily Production & Packaging</h1>
-            <div>
-                <button class="btn btn-outline" onclick="openGlobalCreateModal()">
-                    <i class="fas fa-plus"></i> Create New Size
-                </button>
-            </div>
         </div>
 
-        <div class="card">
-            <div class="card-header"><i class="fas fa-cubes text-warning" style="margin-right:8px;"></i> 1. Pack Final Goods</div>
-            <div style="padding: 20px;">
-                <form id="prodForm">
-                    <input type="hidden" name="save_production" value="1">
+        <div class="grid-layout">
+            <div class="card">
+                <div class="card-header"><i class="fas fa-cubes text-warning" style="margin-right:8px;"></i> 1. Pack Final Goods</div>
+                <div style="padding: 20px;">
+                    <form id="prodForm">
+                        <input type="hidden" name="save_production" value="1">
 
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label class="form-label">Select Product (To Pack)</label>
-                            <select name="product_id" id="product_id" class="form-input" required onchange="checkStock()">
-                                <option value="">-- Choose Product --</option>
-                                <?php foreach ($products as $p): ?>
-                                    <option value="<?= $p['id'] ?>">
-                                        <?= htmlspecialchars($p['name']) ?> (<?= floatval($p['weight']) ?> Kg Oil)
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label">Select Product (To Pack)</label>
+                                <select name="product_id" id="product_id" class="form-input" required onchange="checkStock()">
+                                    <option value="">-- Choose Product --</option>
+                                    <?php foreach ($products as $p): ?>
+                                        <option value="<?= $p['id'] ?>">
+                                            <?= htmlspecialchars($p['name']) ?> (<?= floatval($p['weight']) ?> Kg Oil)
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Quantity to Pack (Packs/Combos)</label>
+                                <input type="number" name="qty" id="qty" class="form-input" placeholder="e.g. 100" required oninput="checkStock()">
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label class="form-label">Quantity to Pack (Packs/Combos)</label>
-                            <input type="number" name="qty" id="qty" class="form-input" placeholder="e.g. 100" required oninput="checkStock()">
-                        </div>
-                    </div>
 
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label class="form-label">Batch Number</label>
-                            <input type="text" name="batch_no" class="form-input" value="BT-<?= date('mdHi') ?>" required>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label">Batch Number</label>
+                                <input type="text" name="batch_no" class="form-input" value="BT-<?= date('mdHi') ?>" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Mfg Date</label>
+                                <input type="date" name="mfg_date" class="form-input" value="<?= date('Y-m-d') ?>" required>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label class="form-label">Mfg Date</label>
-                            <input type="date" name="mfg_date" class="form-input" value="<?= date('Y-m-d') ?>" required>
+
+                        <div id="reqBox" class="req-box">
+                            <h4 style="margin:0 0 10px 0; color:var(--text-main); font-size:1.1rem;"><i class="fas fa-search text-primary" style="margin-right:8px;"></i> Material Consumption Preview</h4>
+                            <table class="req-table">
+                                <thead>
+                                    <tr>
+                                        <th>Item Type</th>
+                                        <th>Required</th>
+                                        <th>Available Stock</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="reqBody">
+                                </tbody>
+                            </table>
                         </div>
-                    </div>
 
-                    <div id="reqBox" class="req-box">
-                        <h4 style="margin:0 0 10px 0; color:var(--text-main); font-size:1.1rem;"><i class="fas fa-search text-primary" style="margin-right:8px;"></i> Material Consumption Preview</h4>
-                        <table class="req-table">
-                            <thead>
-                                <tr>
-                                    <th>Item Type</th>
-                                    <th>Required</th>
-                                    <th>Available Stock</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody id="reqBody">
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <button type="submit" id="saveBtn" class="btn btn-primary" style="width:100%; margin-top:20px; padding:12px;" disabled>
-                        Save Production (Deduct Stock)
-                    </button>
-                </form>
+                        <button type="submit" id="saveBtn" class="btn btn-primary" style="width:100%; margin-top:20px; padding:12px;" disabled>
+                            Save Production (Deduct Stock)
+                        </button>
+                    </form>
+                </div>
             </div>
-        </div>
 
-        <div class="card">
-            <div class="card-header"><i class="fas fa-list text-info" style="margin-right:8px;"></i> 2. Manage Packaging Sizes (Master List)</div>
-            <div class="table-wrap" style="border:none; box-shadow:none; border-radius:0;">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Product Name</th>
-                            <th>Total Oil Content (Kg)</th>
-                            <th>Linked Container(s)</th>
-                            <th style="text-align:right;">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($saved_sizes)): ?>
+            <div class="card">
+                <div class="card-header"><i class="fas fa-list text-info" style="margin-right:8px;"></i> 2. Current Active Sizes (From Recipes)</div>
+                <div class="table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+                    <table>
+                        <thead>
                             <tr>
-                                <td colspan="5" style="text-align:center; color:var(--text-muted); padding:30px;">No packaging sizes created yet. Click 'Create New Size' to add one.</td>
+                                <th>Product Name</th>
+                                <th>Total Oil Content (Kg)</th>
+                                <th>Linked Container(s)</th>
+                                <th style="text-align:right;">Action</th>
                             </tr>
-                        <?php else: ?>
-                            <?php foreach ($saved_sizes as $size): ?>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($saved_sizes)): ?>
                                 <tr>
-                                    <td><span class="badge bg-gray" style="background:#e2e8f0; color:#475569; padding:4px 8px; border-radius:12px;">#<?= $size['prod_id'] ?></span></td>
-                                    <td style="font-weight:700; color:var(--text-main);"><?= htmlspecialchars($size['prod_name']) ?></td>
-                                    <td style="font-weight:600; color:var(--primary);"><?= floatval($size['oil_weight']) ?> Kg</td>
-                                    <td>
-                                        <i class="fas fa-box" style="color:var(--text-muted); margin-right:5px;"></i>
-                                        <span style="font-weight:800; color:var(--success);"><?= floatval($size['qty_needed']) ?>x</span> <?= htmlspecialchars($size['container_name']) ?>
-                                    </td>
-                                    <td style="text-align:right;">
-                                        <a href="?delete_size=<?= $size['prod_id'] ?>" class="btn-icon delete" style="color:var(--danger);" onclick="return confirm('Are you sure you want to delete this packaging configuration?');" title="Delete">
-                                            <i class="fas fa-trash-alt"></i>
-                                        </a>
-                                    </td>
+                                    <td colspan="4" style="text-align:center; color:var(--text-muted); padding:30px;">No packaging sizes found in recipes. Please create them via Product Recipe (BOM).</td>
                                 </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
+                            <?php else: ?>
+                                <?php foreach ($saved_sizes as $size): ?>
+                                    <tr>
+                                        <td style="font-weight:700; color:var(--text-main);"><?= htmlspecialchars($size['prod_name']) ?></td>
+                                        <td style="font-weight:600; color:var(--primary);"><?= floatval($size['oil_weight']) ?> Kg</td>
+                                        <td>
+                                            <i class="fas fa-box" style="color:var(--text-muted); margin-right:5px;"></i>
+                                            <span style="font-weight:800; color:var(--success);"><?= floatval($size['qty_needed']) ?>x</span> <?= htmlspecialchars($size['container_name']) ?>
+                                        </td>
+                                        <td style="text-align:right;">
+                                            <a href="?delete_size=<?= $size['prod_id'] ?>" class="btn-icon delete" style="color:var(--danger);" onclick="return confirm('Are you sure you want to delete this packaging configuration?');" title="Delete">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
     </div>
-
-    
 
     <script>
         // --- STOCK CHECKING ---
@@ -584,7 +535,6 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
                         alert(res.message);
                         window.location.reload();
                     } else {
-                        // Agar server se error aaye, to batao aur button wapas enable karo
                         alert("Error: " + res.error);
                         btn.innerHTML = "<i class='fas fa-check-circle'></i> Confirm & Save Production";
                         btn.disabled = false;

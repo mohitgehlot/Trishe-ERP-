@@ -1,12 +1,323 @@
 <?php
-// grn_intake.php - PRO ERP LAYOUT (Hindi UI / Mandi Mode)
+// grn.php - ALL-IN-ONE (Frontend + Backend Merged)
+declare(strict_types=1);
 include 'config.php';
 session_start();
 
+// 1. Session Check
 if (!isset($_SESSION['admin_id'])) {
+    // Agar AJAX request hai, toh JSON error bhejo
+    if (isset($_POST['action'])) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['success' => false, 'error' => 'Unauthorized']);
+        exit;
+    }
+    // Warna login page par bhej do
     header('location:login.php');
     exit();
 }
+
+// =========================================================================
+// 🌟 BACKEND AJAX HANDLER (Pehle jo grn_handler.php mein tha) 🌟
+// =========================================================================
+if (isset($_POST['action'])) {
+    header('Content-Type: application/json; charset=utf-8');
+    ini_set('display_errors', '0');
+    error_reporting(E_ALL);
+
+    $action = $_POST['action'];
+    try {
+        switch ($action) {
+            case 'seller_search':
+                handleSellerSearch();
+                break;
+            case 'create_grn':
+                handleCreateGRN();
+                break;
+            case 'update_grn':
+                handleUpdateGRN();
+                break;
+            case 'delete_grn':
+                handleDeleteGRN();
+                break;
+            case 'get_grn_details':
+                handleGetGRNDetails();
+                break;
+            case 'get_seller_history':
+                handleGetSellerHistory();
+                break;
+            default:
+                throw new Exception('Invalid action');
+        }
+    } catch (Throwable $e) {
+        error_log("GRN Error: " . $e->getMessage());
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    }
+    exit; // 🛑 IMPORTANT: AJAX request yahan khatam ho jayegi, HTML load nahi hoga.
+}
+
+// --- BACKEND FUNCTIONS ---
+
+function handleSellerSearch()
+{
+    global $conn;
+    $q = trim($_POST['q'] ?? '');
+    if (strlen($q) < 3) {
+        echo json_encode([]);
+        return;
+    }
+
+    $searchTerm = "%$q%";
+    $stmt = $conn->prepare("SELECT id, name, address, phone ,category FROM sellers WHERE category = 'Seeds' AND (name LIKE ? OR phone LIKE ?) LIMIT 10");
+    $stmt->bind_param("ss", $searchTerm, $searchTerm);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    $sellers = [];
+    while ($row = $result->fetch_assoc()) {
+        $sellers[] = $row;
+    }
+    echo json_encode($sellers);
+}
+
+function handleGetSellerHistory()
+{
+    global $conn;
+    $sellerId = (int)$_POST['seller_id'];
+
+    $stmtStats = $conn->prepare("SELECT COUNT(id) as total_count, SUM(total_value) as total_spent FROM inventory_grn WHERE seller_id = ?");
+    $stmtStats->bind_param("i", $sellerId);
+    $stmtStats->execute();
+    $stats = $stmtStats->get_result()->fetch_assoc();
+
+    $stmtList = $conn->prepare("
+        SELECT id, grn_no, total_weight_kg, total_value, created_at 
+        FROM inventory_grn 
+        WHERE seller_id = ? 
+        ORDER BY created_at DESC 
+        LIMIT 10
+    ");
+    $stmtList->bind_param("i", $sellerId);
+    $stmtList->execute();
+    $result = $stmtList->get_result();
+
+    $history = [];
+    while ($row = $result->fetch_assoc()) {
+        $row['formatted_date'] = date('d M Y', strtotime($row['created_at']));
+        $history[] = $row;
+    }
+
+    echo json_encode([
+        'success' => true,
+        'stats' => $stats,
+        'history' => $history
+    ]);
+}
+
+function handleCreateGRN()
+{
+    global $conn;
+
+    $sellerName = trim($_POST['seller_name'] ?? '');
+    $vehicleNo  = trim($_POST['vehicle_no'] ?? '');
+    $itemsJson  = $_POST['items_json'] ?? '[]';
+
+    $fType = $_POST['freight_type'] ?? 'none';
+    $fAmt = (float)($_POST['freight_amount'] ?? 0);
+    $cdType = $_POST['cd_type'] ?? 'percentage';
+    $cdVal = (float)($_POST['cd_val'] ?? 0);
+    $payMode    = $_POST['payment_mode'] ?? 'Pending';
+    $payDate    = $_POST['payment_date'] ?? date('Y-m-d');
+    $payRef     = $_POST['payment_ref'] ?? '';
+
+    if ($sellerName === '' || $vehicleNo === '') throw new Exception('Seller name and vehicle number required');
+
+    $items = json_decode($itemsJson, true);
+    if (empty($items)) throw new Exception('No items added');
+
+    $conn->begin_transaction();
+    try {
+        $sellerId = null;
+        $sellerPhone = trim($_POST['phone'] ?? '');
+        $sellerAddress = trim($_POST['seller_address'] ?? '');
+
+        $stmt = $conn->prepare("SELECT id FROM sellers WHERE name = ? LIMIT 1");
+        $stmt->bind_param("s", $sellerName);
+        $stmt->execute();
+        $res = $stmt->get_result();
+
+        if ($row = $res->fetch_assoc()) {
+            $sellerId = (int)$row['id'];
+            if ($sellerAddress || $sellerPhone) {
+                $stmtUpd = $conn->prepare("UPDATE sellers SET address = ?, phone = ? WHERE id = ?");
+                $stmtUpd->bind_param("ssi", $sellerAddress, $sellerPhone, $sellerId);
+                $stmtUpd->execute();
+            }
+        } else {
+            $stmt = $conn->prepare("INSERT INTO sellers (name, address, phone, created_at, category) VALUES (?, ?, ?, NOW(), 'Seeds')");
+            $stmt->bind_param("sss", $sellerName, $sellerAddress, $sellerPhone);
+            $stmt->execute();
+            $sellerId = (int)$conn->insert_id;
+        }
+
+        $totalWeight = 0.0;
+        $seedValue  = 0.0;
+        foreach ($items as $item) {
+            $totalWeight += (float)$item['weight_kg'];
+            $seedValue += (float)$item['line_value'];
+        }
+
+        $totalValue = $seedValue;
+        if ($fType == 'deduct') {
+            $totalValue -= $fAmt;
+        } elseif ($fType == 'add') {
+            $totalValue += $fAmt;
+        }
+
+        $cdAmt = 0;
+        if ($cdVal > 0) {
+            if ($cdType == 'percentage') {
+                $cdAmt = ($totalValue * $cdVal) / 100;
+            } else {
+                $cdAmt = $cdVal;
+            }
+            $totalValue -= $cdAmt;
+        }
+
+        $grnNo = 'GRN-' . date('Ymd') . '-' . rand(1000, 9999);
+        $adminId = $_SESSION['admin_id'];
+
+        $stmt = $conn->prepare("INSERT INTO inventory_grn (grn_no, seller_id, vehicle_no, total_weight_kg, total_value, created_by, created_at, freight_type, freight_amount, cd_type, cd_val, payment_mode, payment_date, payment_ref) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("sisddisddsds", $grnNo, $sellerId, $vehicleNo, $totalWeight, $totalValue, $adminId, $fType, $fAmt, $cdType, $cdVal, $payMode, $payDate, $payRef);
+        $stmt->execute();
+        $grnId = (int)$conn->insert_id;
+
+        $stmtItem = $conn->prepare("INSERT INTO inventory_grn_items (grn_id, seed_id, price_per_qtl, weight_kg, line_value, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
+        $stmtInv = $conn->prepare("INSERT INTO inventory (seed_id, product_type, transaction_type, batch_no, quantity, unit, price_per_unit, total_value, source_type, reference_id, created_by, transaction_date) VALUES (?, 'SEED', 'GRN_IN', ?, ?, 'KG', ?, ?, 'GRN', ?, ?, NOW())");
+        $stmtMaster = $conn->prepare("UPDATE seeds_master SET current_stock = current_stock + ? WHERE id = ?");
+
+        foreach ($items as $item) {
+            $seedId = (int)$item['seed_id'];
+            $priceQtl = (float)$item['price_per_qtl'];
+            $weight = (float)$item['weight_kg'];
+            $lineVal = (float)$item['line_value'];
+            $pricePerKg = $weight > 0 ? ($lineVal / $weight) : 0;
+
+            $stmtItem->bind_param("iiddd", $grnId, $seedId, $priceQtl, $weight, $lineVal);
+            $stmtItem->execute();
+
+            $stmtInv->bind_param("isdddii", $seedId, $grnNo, $weight, $pricePerKg, $lineVal, $grnId, $adminId);
+            $stmtInv->execute();
+
+            $stmtMaster->bind_param("di", $weight, $seedId);
+            $stmtMaster->execute();
+        }
+
+        $expStatus = ($payMode === 'Pending' || $payMode === 'Credit') ? 'Pending' : 'Paid';
+        $desc = "GRN #$grnNo - $sellerName ($vehicleNo)";
+
+        $stmtExp = $conn->prepare("INSERT INTO factory_expenses (date, category, vendor_id, amount, status, payment_mode, description, grn_id) VALUES (?, 'Raw Material', ?, ?, ?, ?, ?, ?)");
+        $stmtExp->bind_param("sidsssi", $payDate, $sellerId, $totalValue, $expStatus, $payMode, $desc, $grnId);
+        $stmtExp->execute();
+
+        $conn->commit();
+        echo json_encode(['success' => true, 'grn_no' => $grnNo, 'grn_id' => $grnId, 'message' => 'GRN created successfully']);
+    } catch (Exception $e) {
+        $conn->rollback();
+        throw $e;
+    }
+}
+
+function handleUpdateGRN()
+{
+    global $conn;
+    $grnId = (int)$_POST['grn_id'];
+
+    $conn->begin_transaction();
+    try {
+        $stmtOldItems = $conn->prepare("SELECT seed_id, weight_kg FROM inventory_grn_items WHERE grn_id = ?");
+        $stmtOldItems->bind_param("i", $grnId);
+        $stmtOldItems->execute();
+        $resOld = $stmtOldItems->get_result();
+
+        $stmtReverseMaster = $conn->prepare("UPDATE seeds_master SET current_stock = current_stock - ? WHERE id = ?");
+        while ($oldItem = $resOld->fetch_assoc()) {
+            $stmtReverseMaster->bind_param("di", $oldItem['weight_kg'], $oldItem['seed_id']);
+            $stmtReverseMaster->execute();
+        }
+
+        $conn->query("DELETE FROM inventory_grn_items WHERE grn_id = $grnId");
+        $conn->query("DELETE FROM inventory WHERE source_type = 'GRN' AND reference_id = $grnId");
+        $conn->query("DELETE FROM factory_expenses WHERE grn_id = $grnId");
+        $conn->query("DELETE FROM inventory_grn WHERE id = $grnId");
+
+        $conn->commit();
+        handleCreateGRN(); // Re-create with new details
+    } catch (Exception $e) {
+        $conn->rollback();
+        throw $e;
+    }
+}
+
+function handleDeleteGRN()
+{
+    global $conn;
+    $grnId = (int)$_POST['grn_id'];
+
+    $conn->begin_transaction();
+    try {
+        $stmtOldItems = $conn->prepare("SELECT seed_id, weight_kg FROM inventory_grn_items WHERE grn_id = ?");
+        $stmtOldItems->bind_param("i", $grnId);
+        $stmtOldItems->execute();
+        $resOld = $stmtOldItems->get_result();
+
+        $stmtReverseMaster = $conn->prepare("UPDATE seeds_master SET current_stock = current_stock - ? WHERE id = ?");
+        while ($oldItem = $resOld->fetch_assoc()) {
+            $stmtReverseMaster->bind_param("di", $oldItem['weight_kg'], $oldItem['seed_id']);
+            $stmtReverseMaster->execute();
+        }
+
+        $conn->query("DELETE FROM inventory_grn_items WHERE grn_id = $grnId");
+        $conn->query("DELETE FROM inventory WHERE source_type = 'GRN' AND reference_id = $grnId");
+        $conn->query("DELETE FROM factory_expenses WHERE grn_id = $grnId");
+        $conn->query("DELETE FROM inventory_grn WHERE id = $grnId");
+
+        $conn->commit();
+        echo json_encode(['success' => true]);
+    } catch (Exception $e) {
+        $conn->rollback();
+        throw $e;
+    }
+}
+
+function handleGetGRNDetails()
+{
+    global $conn;
+    $grnId = (int)$_POST['grn_id'];
+
+    $stmt = $conn->prepare("SELECT ig.*, s.name as seller_name FROM inventory_grn ig JOIN sellers s ON ig.seller_id = s.id WHERE ig.id = ?");
+    $stmt->bind_param("i", $grnId);
+    $stmt->execute();
+    $header = $stmt->get_result()->fetch_assoc();
+
+    if (!$header) throw new Exception("GRN Not Found");
+
+    $stmt = $conn->prepare("SELECT igi.*, s.name as seed_name FROM inventory_grn_items igi JOIN seeds_master s ON igi.seed_id = s.id WHERE igi.grn_id = ?");
+    $stmt->bind_param("i", $grnId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+
+    $items = [];
+    while ($row = $res->fetch_assoc()) {
+        $items[] = $row;
+    }
+
+    echo json_encode(['success' => true, 'grn' => $header, 'items' => $items]);
+}
+
+// =========================================================================
+// 🌟 FRONTEND RENDERING LOGIC 🌟
+// =========================================================================
 
 $seeds_with_prices = [];
 $stmt = $conn->prepare("
@@ -21,70 +332,341 @@ $result = $stmt->get_result();
 while ($row = $result->fetch_assoc()) {
     $seeds_with_prices[] = $row;
 }
+
+// Edit Mode Logic
+$is_edit = false;
+$edit_grn = null;
+$edit_items = [];
+
+if (isset($_GET['edit']) && intval($_GET['edit']) > 0) {
+    $grn_id = intval($_GET['edit']);
+
+    $q_grn = $conn->query("SELECT ig.*, s.name as seller_name, s.phone, s.address FROM inventory_grn ig LEFT JOIN sellers s ON ig.seller_id = s.id WHERE ig.id = $grn_id");
+
+    if ($q_grn && $q_grn->num_rows > 0) {
+        $is_edit = true;
+        $edit_grn = $q_grn->fetch_assoc();
+
+        $q_items = $conn->query("SELECT igi.*, sm.name as seed_name FROM inventory_grn_items igi LEFT JOIN seeds_master sm ON igi.seed_id = sm.id WHERE igi.grn_id = $grn_id");
+        while ($item = $q_items->fetch_assoc()) {
+            $edit_items[] = [
+                'seed_id' => $item['seed_id'],
+                'seed_name' => $item['seed_name'],
+                'quality' => $item['quality_grade'] ?? 'A',
+                'bags' => $item['bags'] ?? 0,
+                'bag_wt' => $item['bag_weight'] ?? 0.5,
+                'gross_kg' => floatval($item['gross_weight'] ?? $item['weight_kg']),
+                'price_per_qtl' => floatval($item['price_per_qtl']),
+                'effective_price' => floatval($item['price_per_qtl']),
+                'weight_kg' => floatval($item['weight_kg']),
+                'payable_weight' => floatval($item['weight_kg']),
+                'line_value' => floatval($item['line_value']),
+                'bag_rule' => 'deduct'
+            ];
+        }
+    }
+}
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
-    <title>New GRN Entry | Trishe Agro</title>
+    <title><?= $is_edit ? 'Edit GRN' : 'New GRN Entry' ?> | Trishe Agro</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/admin_style.css">
 
     <style>
-        body { overflow-x: hidden; background: #f1f5f9; }
-        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
-        
-        .page-header-box { background: #fff; padding: 20px; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
-        .page-title { font-size: 1.5rem; font-weight: 700; color: var(--text-main); margin: 0; display: flex; align-items: center; gap: 10px; }
-        
-        .grid-layout { display: grid; grid-template-columns: 1.2fr 2fr; gap: 24px; align-items: start; min-width: 0; }
-        .grid-layout>div { min-width: 0; }
-        
-        .form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px; margin-bottom: 15px; align-items: end; }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 15px; }
-        
-        .autocomplete-wrapper { position: relative; }
-        .autocomplete-list { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid var(--border); border-radius: 0 0 8px 8px; max-height: 250px; overflow-y: auto; z-index: 100; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); display: none; }
-        .suggestion-item { padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 0.95rem; }
-        .suggestion-item:last-child { border-bottom: none; }
-        .suggestion-item:hover, .suggestion-item.active { background-color: #e0e7ff; color: var(--primary); }
-        .suggestion-meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
-
-        .seller-history-box { background-color: #eff6ff; border: 1px dashed #bfdbfe; border-radius: 8px; padding: 15px; margin-top: 5px; margin-bottom: 20px; display: none; animation: fadeIn 0.3s ease; }
-        .history-stats { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.95rem; font-weight: 700; color: var(--text-main); }
-        .view-history-btn { font-size: 0.85rem; color: var(--primary); font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
-        .view-history-btn:hover { text-decoration: underline; }
-        .manual-link { color: var(--primary); font-size: 0.85rem; cursor: pointer; text-decoration: underline; display: inline-block; margin-top: 8px; font-weight: 600; }
-        
-        #line_total { color: var(--primary); font-weight: 800; font-size: 1.2rem; }
-        .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: none; box-shadow: none; border-radius: 0; width: 100%; }
-        .table-wrap table { min-width: 600px; width: 100%; }
-
-        .adj-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 15px; display:flex; align-items:center; gap:15px; }
-        .adj-box select { width: auto; flex-shrink: 0; }
-
-        @media (max-width: 1024px) { .grid-layout { grid-template-columns: 1fr; } }
-        @media (max-width: 768px) {
-            .container { padding: 10px; width: 100vw; max-width: 100vw; }
-            .form-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
-            .grid-2 { grid-template-columns: 1fr; gap: 12px; }
-            .adj-box { flex-direction: column; align-items: stretch; gap:10px; }
-            
-            .table-wrap table, .table-wrap thead, .table-wrap tbody, .table-wrap th, .table-wrap td, .table-wrap tr { display: block; width: 100%; }
-            .table-wrap thead { display: none; }
-            .table-wrap tr { margin-bottom: 15px; border: 1px solid var(--border); border-radius: 8px; background: #fff; padding: 10px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
-            .table-wrap td { display: flex; justify-content: space-between; align-items: center; padding: 10px 5px !important; border-bottom: 1px dashed var(--border) !important; text-align: right; }
-            .table-wrap td:last-child { border-bottom: none !important; display: flex; justify-content: flex-end; padding-top: 15px !important; }
-            .table-wrap td::before { content: attr(data-label); font-weight: 700; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; text-align: left; }
-            .table-wrap td:last-child::before { display: none; }
-            .table-wrap tfoot tr { display: flex; flex-direction: column; background: #f8fafc; border-top: 2px solid var(--border); }
-            .table-wrap tfoot td { border-bottom: none !important; padding: 10px !important; }
-            .table-wrap tfoot td:empty { display: none; }
+        body {
+            overflow-x: hidden;
+            background: #f1f5f9;
         }
-        @media (max-width: 480px) { .form-grid { grid-template-columns: 1fr; } }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .page-header-box {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .page-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .grid-layout {
+            display: grid;
+            grid-template-columns: 1.2fr 2fr;
+            gap: 24px;
+            align-items: start;
+            min-width: 0;
+        }
+
+        .grid-layout>div {
+            min-width: 0;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 15px;
+            align-items: end;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 15px;
+        }
+
+        .autocomplete-wrapper {
+            position: relative;
+        }
+
+        .autocomplete-list {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 0 0 8px 8px;
+            max-height: 250px;
+            overflow-y: auto;
+            z-index: 100;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+
+        .suggestion-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.95rem;
+        }
+
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+
+        .suggestion-item:hover,
+        .suggestion-item.active {
+            background-color: #e0e7ff;
+            color: var(--primary);
+        }
+
+        .suggestion-meta {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .seller-history-box {
+            background-color: #eff6ff;
+            border: 1px dashed #bfdbfe;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 5px;
+            margin-bottom: 20px;
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .history-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .view-history-btn {
+            font-size: 0.85rem;
+            color: var(--primary);
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .view-history-btn:hover {
+            text-decoration: underline;
+        }
+
+        .manual-link {
+            color: var(--primary);
+            font-size: 0.85rem;
+            cursor: pointer;
+            text-decoration: underline;
+            display: inline-block;
+            margin-top: 8px;
+            font-weight: 600;
+        }
+
+        #line_total {
+            color: var(--primary);
+            font-weight: 800;
+            font-size: 1.2rem;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            border: none;
+            box-shadow: none;
+            border-radius: 0;
+            width: 100%;
+        }
+
+        .table-wrap table {
+            min-width: 600px;
+            width: 100%;
+        }
+
+        .adj-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .adj-box select {
+            width: auto;
+            flex-shrink: 0;
+        }
+
+        @media (max-width: 1024px) {
+            .grid-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+                width: 100vw;
+                max-width: 100vw;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+            }
+
+            .grid-2 {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .adj-box {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+            }
+
+            .table-wrap table,
+            .table-wrap thead,
+            .table-wrap tbody,
+            .table-wrap th,
+            .table-wrap td,
+            .table-wrap tr {
+                display: block;
+                width: 100%;
+            }
+
+            .table-wrap thead {
+                display: none;
+            }
+
+            .table-wrap tr {
+                margin-bottom: 15px;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                background: #fff;
+                padding: 10px;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            }
+
+            .table-wrap td {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 10px 5px !important;
+                border-bottom: 1px dashed var(--border) !important;
+                text-align: right;
+            }
+
+            .table-wrap td:last-child {
+                border-bottom: none !important;
+                display: flex;
+                justify-content: flex-end;
+                padding-top: 15px !important;
+            }
+
+            .table-wrap td::before {
+                content: attr(data-label);
+                font-weight: 700;
+                color: var(--text-muted);
+                font-size: 0.75rem;
+                text-transform: uppercase;
+                text-align: left;
+            }
+
+            .table-wrap td:last-child::before {
+                display: none;
+            }
+
+            .table-wrap tfoot tr {
+                display: flex;
+                flex-direction: column;
+                background: #f8fafc;
+                border-top: 2px solid var(--border);
+            }
+
+            .table-wrap tfoot td {
+                border-bottom: none !important;
+                padding: 10px !important;
+            }
+
+            .table-wrap tfoot td:empty {
+                display: none;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 
@@ -93,14 +675,22 @@ while ($row = $result->fetch_assoc()) {
 
     <div class="container">
         <div class="page-header-box">
-            <h1 class="page-title"><i class="fas fa-truck-loading text-primary"></i> नई खरीद (मंडी एंट्री)</h1>
+            <h1 class="page-title">
+                <i class="fas <?= $is_edit ? 'fa-edit text-warning' : 'fa-truck-loading text-primary' ?>"></i>
+                <?= $is_edit ? 'GRN एडिट करें (Edit Entry)' : 'नई खरीद (मंडी एंट्री)' ?>
+                <?php if ($is_edit): ?> <span class="badge" style="background:#e2e8f0; color:#475569; font-size:1rem; margin-left:10px;">#<?= $edit_grn['grn_no'] ?></span> <?php endif; ?>
+            </h1>
             <a href="inventory.php" class="btn btn-outline"><i class="fas fa-arrow-left"></i> वापस जाएं</a>
         </div>
 
         <form id="grnForm" autocomplete="off">
             <input type="hidden" name="items_json" id="items_json" value='[]'>
             <input type="hidden" name="seller_id" id="seller_id">
-            <input type="hidden" name="action" value="create_grn">
+
+            <input type="hidden" name="action" value="<?= $is_edit ? 'update_grn' : 'create_grn' ?>">
+            <?php if ($is_edit): ?>
+                <input type="hidden" name="grn_id" value="<?= $grn_id ?>">
+            <?php endif; ?>
 
             <div class="card" style="margin-bottom: 24px;">
                 <div class="card-header" style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
@@ -115,14 +705,14 @@ while ($row = $result->fetch_assoc()) {
                             <label class="form-label">किसान का नाम *</label>
                             <input type="text" id="seller_name" name="seller_name" class="form-input" placeholder="नाम खोजें..." required>
                             <div id="seller_list" class="autocomplete-list"></div>
-                            <small id="new_seller_hint" style="display:none; color:var(--warning); margin-top:5px; font-weight:600;"><i class="fas fa-plus-circle"></i> नया किसान अपने आप जुड़ जायेगा।</small>
+                            <small id="new_seller_hint" style="display:none; color:var(--warning); margin-top:5px; font-weight:600;"><i class="fas fa-plus-circle"></i> नया किसान अपने आप जुड़ जायेगा।</small>
                         </div>
                         <div class="form-group" style="margin:0;">
-                            <label class="form-label">गाड़ी नंबर *</label>
+                            <label class="form-label">गाड़ी नंबर *</label>
                             <input type="text" id="vehicle_no" name="vehicle_no" class="form-input" placeholder="RJ-XX-0000" required style="text-transform: uppercase;">
                         </div>
                         <div class="form-group" style="margin:0;">
-                            <label class="form-label">फ़ोन नंबर</label>
+                            <label class="form-label">फ़ोन नंबर</label>
                             <input type="text" id="phone" name="phone" class="form-input" placeholder="मोबाइल नंबर" readonly style="background:#f8fafc; color:var(--text-muted);">
                         </div>
                         <div class="form-group" style="margin:0;">
@@ -144,10 +734,9 @@ while ($row = $result->fetch_assoc()) {
             </div>
 
             <div class="grid-layout">
-                
                 <div class="left-col">
                     <div class="card" style="margin-bottom: 24px; position: sticky; top: 20px;">
-                        <div class="card-header"><i class="fas fa-balance-scale text-warning" style="margin-right:8px;"></i> माल चढ़ाएं (तौल)</div>
+                        <div class="card-header"><i class="fas fa-balance-scale text-warning" style="margin-right:8px;"></i> माल चढ़ाएं (तौल)</div>
                         <div style="padding: 20px;">
 
                             <div class="form-group autocomplete-wrapper" style="margin-bottom:15px;">
@@ -172,7 +761,7 @@ while ($row = $result->fetch_assoc()) {
                                 <div class="form-group" style="margin:0;">
                                     <label class="form-label">क्वालिटी (Quality)</label>
                                     <select id="seed_quality" class="form-input">
-                                        <option value="A">ग्रेड A (सबसे बढ़िया)</option>
+                                        <option value="A">ग्रेड A (सबसे बढ़िया)</option>
                                         <option value="B">ग्रेड B (अच्छा)</option>
                                         <option value="C">ग्रेड C (औसत)</option>
                                         <option value="D">ग्रेड D (हल्का)</option>
@@ -186,7 +775,7 @@ while ($row = $result->fetch_assoc()) {
 
                             <div style="background: #fffbeb; border: 1px solid #fde68a; padding: 15px; border-radius: 8px; margin: 20px 0;">
                                 <h4 style="margin:0 0 10px 0; color:#b45309; font-size:0.9rem;">बारदाना कटौती (Bag Deduction)</h4>
-                                
+
                                 <div class="form-group" style="margin-bottom:12px;">
                                     <label class="form-label">भुगतान का तरीका (Payment Rule) *</label>
                                     <select id="bag_rule" class="form-input" onchange="calcItem()" style="border-color:#f59e0b; background:#fff;">
@@ -222,7 +811,7 @@ while ($row = $result->fetch_assoc()) {
                             </div>
 
                             <button type="button" id="add_item_btn" class="btn btn-outline" style="width:100%; border-color:var(--primary); color:var(--primary); margin-top:10px;">
-                                <i class="fas fa-arrow-right" style="margin-right:5px;"></i> पक्के बिल में जोड़ें (Add to Bill)
+                                <i class="fas fa-arrow-right" style="margin-right:5px;"></i> पक्के बिल में जोड़ें (Add to Bill)
                             </button>
                         </div>
                     </div>
@@ -244,7 +833,7 @@ while ($row = $result->fetch_assoc()) {
                                 </thead>
                                 <tbody id="items_table_body">
                                     <tr>
-                                        <td colspan="5" style="text-align:center; color:var(--text-muted); padding:30px;">अभी बिल में कोई माल नहीं जोड़ा गया है।</td>
+                                        <td colspan="5" style="text-align:center; color:var(--text-muted); padding:30px;">अभी बिल में कोई माल नहीं जोड़ा गया है।</td>
                                     </tr>
                                 </tbody>
                                 <tfoot>
@@ -255,7 +844,7 @@ while ($row = $result->fetch_assoc()) {
                                         <td></td>
                                     </tr>
                                     <tr style="background:#fff;">
-                                        <td colspan="3" style="text-align:right; font-weight:600; color:var(--text-muted);">गाड़ी भाड़ा (Freight):</td>
+                                        <td colspan="3" style="text-align:right; font-weight:600; color:var(--text-muted);">गाड़ी भाड़ा (Freight):</td>
                                         <td id="disp_freight" style="font-weight:700; color:var(--text-muted);">₹ 0.00</td>
                                         <td></td>
                                     </tr>
@@ -279,11 +868,11 @@ while ($row = $result->fetch_assoc()) {
                             <div class="card-header" style="font-size:0.95rem;"><i class="fas fa-calculator text-warning" style="margin-right:8px;"></i> अन्य खर्च / कटौती</div>
                             <div style="padding: 15px;">
                                 <div class="form-group">
-                                    <label class="form-label" style="font-size:0.8rem;">गाड़ी भाड़ा (Freight)</label>
+                                    <label class="form-label" style="font-size:0.8rem;">गाड़ी भाड़ा (Freight)</label>
                                     <div style="display:flex; gap:10px;">
                                         <select name="freight_type" id="freight_type" class="form-input" onchange="calcGrandTotal()">
                                             <option value="deduct">काटें (कारखाना देगा)</option>
-                                            <option value="add">जोड़ें (किसान देगा)</option>
+                                            <option value="add">जोड़ें (किसान देगा)</option>
                                             <option value="none" selected>कुछ नहीं (None)</option>
                                         </select>
                                         <input type="number" step="0.01" name="freight_amount" id="freight_amt" class="form-input" placeholder="₹ Amount" value="0" oninput="calcGrandTotal()" style="width:100px;">
@@ -329,8 +918,9 @@ while ($row = $result->fetch_assoc()) {
                         </div>
                     </div>
 
-                    <button type="submit" id="submit_grn_btn" class="btn btn-primary" style="width:100%; padding:18px; font-size:1.2rem; margin-top:24px; background:var(--success); border-color:var(--success); box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2);">
-                        <i class="fas fa-save" style="margin-right:8px;"></i> बिल सेव करें (Save Bill)
+                    <button type="submit" id="submit_grn_btn" class="btn btn-primary" style="width:100%; padding:18px; font-size:1.2rem; margin-top:24px; background: <?= $is_edit ? 'var(--warning)' : 'var(--success)' ?>; border-color: <?= $is_edit ? 'var(--warning)' : 'var(--success)' ?>; box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2);">
+                        <i class="fas <?= $is_edit ? 'fa-edit' : 'fa-save' ?>" style="margin-right:8px;"></i>
+                        <?= $is_edit ? 'अपडेट करें (Update GRN)' : 'बिल सेव करें (Save Bill)' ?>
                     </button>
 
                 </div>
@@ -376,6 +966,7 @@ while ($row = $result->fetch_assoc()) {
             let sellerList = [];
             let currentFocus = -1;
             let debounceTimer;
+            const isEditMode = <?= $is_edit ? 'true' : 'false' ?>;
 
             const els = {
                 sellerName: document.getElementById('seller_name'),
@@ -442,7 +1033,7 @@ while ($row = $result->fetch_assoc()) {
                     fd.append('action', 'seller_search');
                     fd.append('q', val);
 
-                    fetch('grn_handler.php', { method: 'POST', body: fd })
+                    fetch('grn.php', { method: 'POST', body: fd })
                         .then(r => r.json())
                         .then(data => { sellerList = data; renderSellerList(data); });
                 }, 300);
@@ -477,11 +1068,10 @@ while ($row = $result->fetch_assoc()) {
 
                 closeLists();
                 
-                // Fetch History
                 const fd = new FormData();
                 fd.append('action', 'get_seller_history');
                 fd.append('seller_id', s.id);
-                fetch('grn_handler.php', { method: 'POST', body: fd })
+                fetch('grn.php', { method: 'POST', body: fd })
                     .then(r => r.json())
                     .then(data => {
                         if (data.success) {
@@ -565,7 +1155,6 @@ while ($row = $result->fetch_assoc()) {
                 els.grossWt.focus();
             }
 
-            // 🌟 SMART CALCULATION LOGIC 🌟
             window.calcItem = function() {
                 const gross = parseFloat(els.grossWt.value) || 0;
                 const bags = parseInt(els.bags.value) || 0;
@@ -641,7 +1230,7 @@ while ($row = $result->fetch_assoc()) {
 
             function renderTable() {
                 if (addedItems.length === 0) {
-                    els.tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:30px;">अभी बिल में कोई माल नहीं जोड़ा गया है।</td></tr>`;
+                    els.tableBody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:30px;">अभी बिल में कोई माल नहीं जोड़ा गया है।</td></tr>`;
                     els.grandWeight.textContent = '0.00 Kg';
                     els.seedValueDisp.textContent = '₹ 0.00';
                     window.calcGrandTotal();
@@ -700,7 +1289,6 @@ while ($row = $result->fetch_assoc()) {
 
                 let finalToPay = seedVal;
 
-                // Freight Logic
                 let freightActual = 0;
                 if(fType === 'deduct') { 
                     freightActual = -fAmt; 
@@ -716,7 +1304,6 @@ while ($row = $result->fetch_assoc()) {
                 }
                 finalToPay += freightActual;
 
-                // Cash Discount Logic 
                 let cdAmt = 0;
                 if(cdVal > 0) {
                     if(cdType === 'percentage') { cdAmt = (finalToPay * cdVal) / 100; }
@@ -747,9 +1334,11 @@ while ($row = $result->fetch_assoc()) {
             // --- 6. SUBMIT ---
             els.form.addEventListener('submit', function(e) {
                 e.preventDefault();
-                if (addedItems.length === 0) return alert('कृपया बिल में कम से कम एक माल जोड़ें!');
+                if (addedItems.length === 0) return alert('कृपया बिल में कम से कम एक माल जोड़ें!');
                 if (!els.sellerName.value) return alert('कृपया किसान का नाम डालें!');
-                if (!confirm('बिल सेव करें और स्टॉक अपडेट करें?')) return;
+                
+                const actionMsg = isEditMode ? 'क्या आप इस GRN को अपडेट करना चाहते हैं?' : 'बिल सेव करें और स्टॉक अपडेट करें?';
+                if (!confirm(actionMsg)) return;
 
                 document.getElementById('items_json').value = JSON.stringify(addedItems);
 
@@ -760,17 +1349,64 @@ while ($row = $result->fetch_assoc()) {
 
                 const fd = new FormData(this);
 
-                fetch('grn_handler.php', { method: 'POST', body: fd })
+                fetch('grn.php', { method: 'POST', body: fd })
                     .then(res => res.json())
                     .then(data => {
                         if (data.success) {
-                            if (confirm(`✅ बिल सेव हो गया! #${data.grn_no}\n\n🖨️ क्या आप बोरियों के स्टीकर (Stickers) प्रिंट करना चाहते हैं?`)) { printAllStickers(data.grn_id || data.id); }
-                            window.location.reload();
+                            if (!isEditMode) {
+                                if (confirm(`✅ बिल सेव हो गया! #${data.grn_no}\n\n🖨️ क्या आप बोरियों के स्टीकर (Stickers) प्रिंट करना चाहते हैं?`)) { 
+                                    printAllStickers(data.grn_id || data.id); 
+                                }
+                            } else {
+                                alert(`✅ बिल #${data.grn_no} सफलतापूर्वक अपडेट हो गया है!`);
+                            }
+                            window.location.href = 'inventory.php';
                         } else throw new Error(data.error || 'Server Error');
                     })
                     .catch(err => { alert('Error: ' + err.message); btn.disabled = false; btn.innerHTML = oldHtml; });
             });
+
+
+            // ==========================================
+            // 🌟 PRE-FILL DATA IF EDIT MODE IS ON 🌟
+            // ==========================================
+            if (isEditMode) {
+                const editGrnData = <?= json_encode($edit_grn) ?>;
+                const editItemsData = <?= json_encode($edit_items) ?>;
+
+                if(editGrnData) {
+                    els.sellerId.value = editGrnData.seller_id || '';
+                    els.sellerName.value = editGrnData.seller_name || '';
+                    els.sellerPhone.value = editGrnData.phone || '';
+                    els.sellerAddr.value = editGrnData.address || '';
+                    els.vehicle.value = editGrnData.vehicle_no || '';
+                    
+                    els.sellerPhone.readOnly = true;
+                    els.sellerAddr.readOnly = true;
+
+                    els.fType.value = editGrnData.freight_type || 'none';
+                    els.fAmt.value = editGrnData.freight_amount || '0';
+                    els.cdType.value = editGrnData.cd_type || 'percentage';
+                    els.cdVal.value = editGrnData.cd_val || '0';
+
+                    els.payMode.value = editGrnData.payment_mode || 'Pending';
+                    els.payMode.dispatchEvent(new Event('change'));
+
+                    const dateEl = document.getElementById('payment_date');
+                    if(dateEl && editGrnData.payment_date) dateEl.value = editGrnData.payment_date;
+                    
+                    const refEl = document.getElementById('payment_ref');
+                    if(refEl) refEl.value = editGrnData.payment_ref || '';
+                }
+
+                if(editItemsData && editItemsData.length > 0) {
+                    addedItems = editItemsData;
+                    renderTable(); // Yahan ab ye bina kisi error ke table aur saara total render kar dega!
+                }
+            }
+
         });
     </script>
 </body>
+
 </html>

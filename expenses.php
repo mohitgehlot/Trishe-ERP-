@@ -1,5 +1,5 @@
 <?php
-// expenses.php - MASTER CSS & GLOBAL SHORTCUT READY
+// expenses.php - MASTER CSS & GLOBAL SHORTCUT READY (Smart Edit Fixed)
 include 'config.php';
 session_start();
 
@@ -163,9 +163,6 @@ if (isset($_GET['edit'])) {
         /* Fix Table Horizontal Scroll */
         .table-wrap table { min-width: 100% !important; }
 
-        /* Form Grid for Edit Modal */
-        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
-
         @media(max-width: 768px) {
             body { padding-left: 0; }
             .container { padding: 15px; }
@@ -177,7 +174,6 @@ if (isset($_GET['edit'])) {
             .stat-value { font-size: 1.4rem; }
             
             .filter-bar-wrap { flex-direction: column; align-items: stretch; }
-            .form-grid { grid-template-columns: 1fr; } /* Modal forms stack on mobile */
         }
     </style>
 </head>
@@ -305,35 +301,59 @@ if (isset($_GET['edit'])) {
     </div>
 
     <script>
-        // Removes "?msg=saved" from the URL bar so it doesn't stay there on reload
         if(window.history.replaceState) {
             const url = new URL(window.location); url.searchParams.delete('msg'); window.history.replaceState(null, '', url);
         }
 
-        // --- EDIT EXPENSE (Pushes data into the Global Form) ---
+        // --- EDIT EXPENSE (Smart Error-Free Data Push) ---
         function editExpense(data) {
-            // Open the global modal (function defined in admin_header.php)
             openGlobalExpenseModal();
             
-            // Change title for Edit
-            document.querySelector('#globalExpenseModal .g-modal-header h3').innerHTML = '<i class="fas fa-edit text-warning" style="margin-right:8px;"></i> Edit Expense';
+            const titleEl = document.querySelector('#globalExpenseModal .g-modal-header h3');
+            if(titleEl) titleEl.innerHTML = '<i class="fas fa-edit text-warning" style="margin-right:8px;"></i> Edit Expense';
             
-            // Fill the form fields inside the global modal
             const form = document.getElementById('globalExpenseForm');
-            form.querySelector('input[name="expense_id"]').value = data.id;
-            form.querySelector('input[name="date"]').value = data.date;
-            form.querySelector('select[name="category"]').value = data.category;
-            form.querySelector('select[name="vendor_id"]').value = data.vendor_id;
-            form.querySelector('input[name="amount"]').value = data.amount;
-            form.querySelector('select[name="status"]').value = data.status;
-            form.querySelector('input[name="description"]').value = data.description || '';
-            
-            form.querySelector('select[name="payment_mode"]').value = data.payment_mode || 'Cash';
-            form.querySelector('input[name="invoice_no"]').value = data.invoice_no || '';
-            form.querySelector('input[name="due_date"]').value = data.due_date || '';
-            form.querySelector('input[name="authorized_by"]').value = data.authorized_by || '';
+            if(!form) return;
 
-            // We handle the hidden existing_bill dynamically by injecting it if it doesn't exist
+            // 1. Safely handle the hidden 'expense_id' field
+            let idField = form.querySelector('input[name="expense_id"]');
+            if(!idField) {
+                idField = document.createElement('input');
+                idField.type = 'hidden';
+                idField.name = 'expense_id';
+                form.appendChild(idField);
+            }
+            idField.value = data.id;
+
+            // 2. Safe Data Filler Function
+            const setVal = (selector, val) => {
+                let el = form.querySelector(selector);
+                if (el) {
+                    el.value = val || '';
+                    if(el.tagName === 'SELECT' && el.value !== val && val) {
+                        for(let i=0; i < el.options.length; i++) {
+                            if(el.options[i].value === val || el.options[i].text === val) {
+                                el.selectedIndex = i;
+                                break;
+                            }
+                        }
+                    }
+                }
+            };
+
+            // 3. Fill all fields safely
+            setVal('input[name="date"]', data.date);
+            setVal('select[name="category"]', data.category);
+            setVal('select[name="vendor_id"]', data.vendor_id);
+            setVal('input[name="amount"]', data.amount);
+            setVal('select[name="status"]', data.status);
+            setVal('input[name="description"]', data.description);
+            setVal('select[name="payment_mode"]', data.payment_mode || 'Cash');
+            setVal('input[name="invoice_no"]', data.invoice_no);
+            setVal('input[name="due_date"]', data.due_date);
+            setVal('input[name="authorized_by"]', data.authorized_by);
+
+            // 4. Safely handle existing bill file hidden input
             let existingBillInput = form.querySelector('input[name="existing_bill"]');
             if(!existingBillInput) {
                 existingBillInput = document.createElement('input');
@@ -345,7 +365,6 @@ if (isset($_GET['edit'])) {
         }
 
         <?php if ($edit_data): ?> 
-            // If page loaded with ?edit=ID
             editExpense(<?= json_encode($edit_data) ?>);
         <?php endif; ?>
     </script>

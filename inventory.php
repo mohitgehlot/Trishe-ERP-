@@ -594,41 +594,62 @@ function formatDate($date)
                 </div>
             </div>
         </div>
-
-        <h3 style="margin-top:40px; margin-bottom:15px; font-size:1.2rem; color:var(--text-main);">
-            <i class="fas fa-history text-muted" style="margin-right:8px;"></i> Recent GRN History
-        </h3>
+<div class="page-header" style="margin-top: 40px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+            <h3 style="font-size:1.3rem; margin:0; color:var(--text-main);">
+                <i class="fas fa-file-invoice text-primary" style="margin-right:8px;"></i> Purchase History (GRN)
+            </h3>
+            
+            <div style="position: relative; width: 300px; max-width: 100%;">
+                <i class="fas fa-search" style="position: absolute; left: 12px; top: 12px; color: #94a3b8;"></i>
+                <input type="text" id="searchGRN" onkeyup="filterGRNTable()" placeholder="Search by GRN No, Seller or Vehicle..." class="form-input" style="padding-left: 35px; width: 100%; border-radius: 20px; background: #fff;">
+            </div>
+        </div>
 
         <div class="card">
             <div class="table-wrap" style="border:none; box-shadow:none; border-radius:0;">
-                <table>
-                    <thead>
+                <table id="grnTable">
+                    <thead style="background: #f8fafc;">
                         <tr>
-                            <th>GRN No</th>
-                            <th>Seller</th>
+                            <th style="cursor:pointer;" onclick="sortTable(0)">GRN No <i class="fas fa-sort"></i></th>
+                            <th style="cursor:pointer;" onclick="sortTable(1)">Seller Name <i class="fas fa-sort"></i></th>
                             <th>Vehicle No</th>
-                            <th>Total Weight</th>
-                            <th>Total Value</th>
-                            <th>Date</th>
-                            <th style="text-align:right;">Action</th>
+                            <th style="cursor:pointer;" onclick="sortTable(3)">Total Weight <i class="fas fa-sort"></i></th>
+                            <th style="cursor:pointer;" onclick="sortTable(4)">Total Value <i class="fas fa-sort"></i></th>
+                            <th style="cursor:pointer;" onclick="sortTable(5)">Date <i class="fas fa-sort"></i></th>
+                            <th style="text-align:right;">Actions</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="grnTableBody">
                         <?php if (empty($grn_list)): ?>
                             <tr>
-                                <td colspan="7" style="text-align:center; padding:30px; color:#999;">No records found</td>
+                                <td colspan="7" style="text-align:center; padding:40px; color:#94a3b8; font-size: 1rem;">No purchase records found.</td>
                             </tr>
                         <?php else: ?>
                             <?php foreach ($grn_list as $grn): ?>
                                 <tr>
                                     <td style="color:var(--primary); font-weight:700;"><?= $grn['grn_no'] ?></td>
-                                    <td><?= htmlspecialchars($grn['seller_name']) ?></td>
-                                    <td><?= htmlspecialchars($grn['vehicle_no']) ?></td>
-                                    <td><?= number_format($grn['total_weight_kg'], 2) ?> kg</td>
-                                    <td style="color:var(--success); font-weight:700;"><?= formatCurrency($grn['total_value']) ?></td>
-                                    <td><?= formatDate($grn['created_at']) ?></td>
-                                    <td style="text-align:right;">
-                                        <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="viewGRN(<?= $grn['id'] ?>)">View</button>
+                                    <td>
+                                        <div style="font-weight: 600; color: var(--text-main);"><?= htmlspecialchars($grn['seller_name']) ?></div>
+                                    </td>
+                                    <td style="color: var(--text-muted); font-size: 0.9rem;"><?= htmlspecialchars($grn['vehicle_no']) ?></td>
+                                    <td style="font-weight: 600;"><?= number_format($grn['total_weight_kg'], 2) ?> kg</td>
+                                    <td>
+                                        <div style="color:var(--success); font-weight:800; font-size: 1.05rem;"><?= formatCurrency($grn['total_value']) ?></div>
+                                    </td>
+                                    <td>
+                                        <div style="font-weight: 500; color: var(--text-main);"><?= date('d M Y', strtotime($grn['created_at'])) ?></div>
+                                        <div style="font-size: 0.8rem; color: var(--text-muted);"><?= date('h:i A', strtotime($grn['created_at'])) ?></div>
+                                    </td>
+                                    <td style="text-align:right; white-space: nowrap;">
+                                        <button class="btn-icon" style="color:var(--info); font-size:1rem;" onclick="viewGRN(<?= $grn['id'] ?>)" title="View Details">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="btn-icon" style="color:var(--warning); font-size:1rem;" onclick="editGRN(<?= $grn['id'] ?>)" title="Edit GRN">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn-icon delete" style="color:var(--danger); font-size:1rem;" onclick="deleteGRN(<?= $grn['id'] ?>, '<?= $grn['grn_no'] ?>')" title="Delete GRN">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -636,6 +657,12 @@ function formatDate($date)
                     </tbody>
                 </table>
             </div>
+            
+            <?php if (count($grn_list) >= 10): ?>
+                <div style="padding: 15px; text-align: center; border-top: 1px solid var(--border); background: #f8fafc; font-size: 0.9rem; color: var(--text-muted);">
+                    Showing recent <?= count($grn_list) ?> records. Use the search bar to find older entries.
+                </div>
+            <?php endif; ?>
         </div>
 
     </div>
@@ -860,7 +887,103 @@ function formatDate($date)
                     document.getElementById('ledgerBody').innerHTML = '<p style="color:red; text-align:center;">System Error</p>';
                 });
         }
+// 🌟 GRN TABLE SEARCH FUNCTION 🌟
+        function filterGRNTable() {
+            let input = document.getElementById("searchGRN");
+            let filter = input.value.toUpperCase();
+            let table = document.getElementById("grnTable");
+            let tr = table.getElementsByTagName("tr");
 
+            for (let i = 1; i < tr.length; i++) { // Skip header row
+                let tdGRN = tr[i].getElementsByTagName("td")[0];
+                let tdSeller = tr[i].getElementsByTagName("td")[1];
+                let tdVehicle = tr[i].getElementsByTagName("td")[2];
+                
+                if (tdGRN || tdSeller || tdVehicle) {
+                    let txtValueGRN = tdGRN.textContent || tdGRN.innerText;
+                    let txtValueSeller = tdSeller.textContent || tdSeller.innerText;
+                    let txtValueVehicle = tdVehicle.textContent || tdVehicle.innerText;
+                    
+                    if (txtValueGRN.toUpperCase().indexOf(filter) > -1 || 
+                        txtValueSeller.toUpperCase().indexOf(filter) > -1 || 
+                        txtValueVehicle.toUpperCase().indexOf(filter) > -1) {
+                        tr[i].style.display = "";
+                    } else {
+                        tr[i].style.display = "none";
+                    }
+                }       
+            }
+        }
+
+        // 🌟 GRN TABLE SORT FUNCTION 🌟
+        function sortTable(n) {
+            let table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+            table = document.getElementById("grnTable");
+            switching = true;
+            dir = "asc"; 
+            
+            while (switching) {
+                switching = false;
+                rows = table.rows;
+                
+                for (i = 1; i < (rows.length - 1); i++) {
+                    shouldSwitch = false;
+                    x = rows[i].getElementsByTagName("td")[n];
+                    y = rows[i + 1].getElementsByTagName("td")[n];
+                    
+                    let cmpX = x.innerText.toLowerCase();
+                    let cmpY = y.innerText.toLowerCase();
+
+                    // If it's a number/currency column, strip symbols and parse
+                    if(n === 3 || n === 4) { 
+                        cmpX = parseFloat(cmpX.replace(/[^0-9.-]+/g,""));
+                        cmpY = parseFloat(cmpY.replace(/[^0-9.-]+/g,""));
+                    }
+
+                    if (dir == "asc") {
+                        if (cmpX > cmpY) { shouldSwitch = true; break; }
+                    } else if (dir == "desc") {
+                        if (cmpX < cmpY) { shouldSwitch = true; break; }
+                    }
+                }
+                if (shouldSwitch) {
+                    rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                    switching = true;
+                    switchcount ++;      
+                } else {
+                    if (switchcount == 0 && dir == "asc") {
+                        dir = "desc";
+                        switching = true;
+                    }
+                }
+            }
+        }
+
+      // 🌟 GRN ACTIONS (Edit) 🌟
+        function editGRN(grnId) {
+            window.location.href = `grn.php?edit=${grnId}`;
+        }
+
+        function deleteGRN(grnId, grnNo) {
+            let confirmMsg = `WARNING! You are about to delete GRN ${grnNo}.\n\nThis will:\n1. Remove the stock from your inventory.\n2. Delete the payment/expense record.\n\nAre you absolutely sure?`;
+            
+            if(confirm(confirmMsg)) {
+                // Yahan Ajax request banani hogi jo backend mein delete karega
+                alert(`GRN ${grnNo} deletion process initiated...`);
+                
+                // Demo fetch call (To be implemented in backend)
+                /*
+                const fd = new FormData();
+                fd.append('action', 'delete_grn');
+                fd.append('grn_id', grnId);
+                fetch('grn_handler.php', { method: 'POST', body: fd })
+                .then(r => r.json()).then(res => {
+                    if(res.success) { alert("Deleted Successfully"); window.location.reload(); }
+                    else { alert("Error: " + res.error); }
+                });
+                */
+            }
+        }
         // --- SEED LEDGER ---
         function viewLedger(seedId, seedName) {
             document.getElementById('ledgerItemName').innerText = seedName;

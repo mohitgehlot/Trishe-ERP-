@@ -20,11 +20,10 @@ function formatCurrency($amount)
 // Default is Current Year, but you can add month filters later
 $year = date('Y');
 
-// A. REVENUE & COGS (From Sales)
-// Sales (Revenue) aur laagat (COGS) nikalna
+// 🌟 A1. PRODUCT SALES REVENUE & COGS 🌟
 $sales_sql = "
     SELECT 
-        COALESCE(SUM(oi.line_total), 0) as total_revenue,
+        COALESCE(SUM(oi.line_total), 0) as total_sales_revenue,
         COALESCE(SUM(oi.qty * p.cost_price), 0) as total_cogs
     FROM order_items oi
     JOIN orders o ON oi.order_id = o.id
@@ -32,8 +31,20 @@ $sales_sql = "
     WHERE o.status != 'Cancelled' AND YEAR(o.created_at) = '$year'
 ";
 $sales_data = $conn->query($sales_sql)->fetch_assoc();
-$total_revenue = $sales_data['total_revenue'];
+$total_sales_revenue = $sales_data['total_sales_revenue'];
 $total_cogs = $sales_data['total_cogs'];
+
+// 🌟 A2. JOB WORK REVENUE (PISAI KI KAMAI) 🌟
+$job_sql = "
+    SELECT COALESCE(SUM(total_amount), 0) as total_job_revenue
+    FROM service_orders
+    WHERE status != 'Cancelled' AND YEAR(service_date) = '$year'
+";
+$job_data = $conn->query($job_sql)->fetch_assoc();
+$total_job_revenue = $job_data['total_job_revenue'];
+
+// 🌟 A3. COMBINED TOTAL REVENUE 🌟
+$total_revenue = $total_sales_revenue + $total_job_revenue;
 
 // B. GROSS PROFIT
 $gross_profit = $total_revenue - $total_cogs;
@@ -66,7 +77,7 @@ $net_margin = ($total_revenue > 0) ? ($net_profit / $total_revenue) * 100 : 0;
 
 // E. FUNDS ADDED (Capital Inflow)
 $funds_sql = "SELECT COALESCE(SUM(amount), 0) as total_funds FROM factory_expenses WHERE entry_type = 'Income' AND YEAR(date) = '$year'";
-$total_funds = $conn->query($funds_sql)->fetch_assoc()['total_funds'];
+$total_funds = $conn->query($funds_sql)->fetch_assoc()['total_funds'] ?? 0;
 
 ?>
 
@@ -300,9 +311,9 @@ $total_funds = $conn->query($funds_sql)->fetch_assoc()['total_funds'];
 
         <div class="metrics-grid">
             <div class="metric-card revenue">
-                <div class="metric-title">Total Revenue (Sales)</div>
+                <div class="metric-title">Total Revenue (Sales + Job Work)</div>
                 <div class="metric-value"><?= formatCurrency($total_revenue) ?></div>
-                <div class="metric-sub" style="color: #3b82f6;">Income from Operations</div>
+                <div class="metric-sub" style="color: #3b82f6;">Total Income from Operations</div>
             </div>
 
             <div class="metric-card cogs">
@@ -340,9 +351,21 @@ $total_funds = $conn->query($funds_sql)->fetch_assoc()['total_funds'];
                 </div>
                 <div style="padding: 10px;">
                     <table class="pl-table">
+
                         <tr>
-                            <td style="font-weight: 800; color: #3b82f6;">Total Revenue (A)</td>
-                            <td class="val" style="color: #3b82f6;"><?= formatCurrency($total_revenue) ?></td>
+                            <td colspan="2" style="font-weight:800; color:var(--text-main); border-bottom:none;">Operating Revenue</td>
+                        </tr>
+                        <tr>
+                            <td class="indent"><i class="fas fa-box" style="margin-right:5px; opacity:0.5;"></i> Product Sales</td>
+                            <td class="val" style="color: #3b82f6;"><?= formatCurrency($total_sales_revenue) ?></td>
+                        </tr>
+                        <tr>
+                            <td class="indent"><i class="fas fa-cogs" style="margin-right:5px; opacity:0.5;"></i> Job Work (Pisai)</td>
+                            <td class="val" style="color: #3b82f6;"><?= formatCurrency($total_job_revenue) ?></td>
+                        </tr>
+                        <tr class="total-row" style="background:#f8fafc;">
+                            <td style="color: #3b82f6; font-size:1.1rem; padding:15px 10px;">Total Revenue (A)</td>
+                            <td class="val" style="color: #3b82f6; padding:15px 10px;"><?= formatCurrency($total_revenue) ?></td>
                         </tr>
 
                         <tr>

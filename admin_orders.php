@@ -1,5 +1,5 @@
 <?php
-// admin_orders.php - MOBILE RESPONSIVE + DYNAMIC PRINT + JOBWORK PAYMENT STATUS + ONLINE ORDERS BUTTON
+// admin_orders.php - PRO VERSION (2-Stage Job Tracking, Cake Settlement, Edit Job)
 include 'config.php';
 session_start();
 
@@ -52,20 +52,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_service_order']))
     }
 }
 
-// 2. UPDATE SERVICE
+// 2. EDIT JOB WORK
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_service_order'])) {
+    $sid = intval($_POST['edit_job_id']);
+    $weight = floatval($_POST['e_weight_kg']);
+    $rate = floatval($_POST['e_rate_per_kg']);
+    $total = $weight * $rate;
+    $note = $_POST['e_notes'];
+
+    $stmt = $conn->prepare("UPDATE service_orders SET weight_kg=?, rate_per_kg=?, total_amount=?, notes=? WHERE id=?");
+    $stmt->bind_param("dddsi", $weight, $rate, $total, $note, $sid);
+    $stmt->execute();
+    header("Location: admin_orders.php?view=services&msg=JobUpdated");
+    exit;
+}
+
+// 3. UPDATE SERVICE STATUS (STAGE 1 & STAGE 2)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_service_status'])) {
     $sid = intval($_POST['service_id']);
     $status = $_POST['status'];
-    $payment_status = $_POST['payment_status'];
-    $oil = floatval($_POST['oil_returned'] ?? 0);
-    $cake = floatval($_POST['cake_returned'] ?? 0);
+    $payment_status = $_POST['payment_status'] ?? 'Pending';
 
-    $conn->query("UPDATE service_orders SET status='$status', payment_status='$payment_status', oil_returned='$oil', cake_returned='$cake' WHERE id=$sid");
+    // Check if weights are provided (Stage 1 to Stage 2 transition)
+    if (isset($_POST['oil_returned']) && isset($_POST['cake_returned'])) {
+        $oil = floatval($_POST['oil_returned']);
+        $cake = floatval($_POST['cake_returned']);
+        $conn->query("UPDATE service_orders SET status='$status', oil_returned='$oil', cake_returned='$cake' WHERE id=$sid");
+    } else {
+        // Stage 2 Delivery & Settlement
+        $cake_settlement = $_POST['cake_settlement'] ?? 'customer';
+
+        $conn->begin_transaction();
+        try {
+            if ($cake_settlement === 'factory') {
+                $payment_status = 'Waived (Cake Kept)';
+                $note = "Cake Kept - Job #$sid";
+                $check_stock = $conn->query("SELECT id FROM raw_material_inventory WHERE notes = '$note'");
+
+                if ($check_stock->num_rows == 0) {
+                    $jobData = $conn->query("SELECT seed_type, cake_returned FROM service_orders WHERE id=$sid")->fetch_assoc();
+                    $s_name = $jobData['seed_type'];
+                    $cake_qty = floatval($jobData['cake_returned']);
+
+                    if ($cake_qty > 0) {
+                        $seed_res = $conn->query("SELECT id FROM seeds_master WHERE name = '$s_name'");
+                        if ($seed_res && $seed_res->num_rows > 0) {
+                            $seed_id = $seed_res->fetch_assoc()['id'];
+                            $conn->query("INSERT INTO raw_material_inventory (seed_id, product_type, transaction_type, quantity, unit, source_type, notes, transaction_date) VALUES ($seed_id, 'CAKE', 'RAW_IN', $cake_qty, 'KG', 'PRODUCTION', '$note', NOW())");
+                        }
+                    }
+                }
+            }
+
+            $stmt = $conn->prepare("UPDATE service_orders SET status=?, payment_status=? WHERE id=?");
+            $stmt->bind_param("ssi", $status, $payment_status, $sid);
+            $stmt->execute();
+
+            $conn->commit();
+        } catch (Exception $e) {
+            $conn->rollback();
+            die("Error: " . $e->getMessage());
+        }
+    }
+
     header("Location: admin_orders.php?view=services&msg=Updated");
     exit;
 }
 
-// 3. UPDATE SALES
+// 4. UPDATE SALES
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_sales_order'])) {
     $oid = intval($_POST['order_id']);
     $status = $_POST['order_status'];
@@ -76,39 +130,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_sales_order'])
     exit;
 }
 
-// 4. DELETE
+// 5. DELETE (WITH SMART STOCK RETURN LOGIC)
 if (isset($_GET['delete_service'])) {
     $id = intval($_GET['delete_service']);
     $conn->query("DELETE FROM service_orders WHERE id=$id");
+    $conn->query("DELETE FROM raw_material_inventory WHERE notes = 'Cake Kept - Job #$id'");
     header("Location: admin_orders.php?view=services&msg=Deleted");
     exit;
 }
+
 if (isset($_GET['delete_order'])) {
     $id = intval($_GET['delete_order']);
-    $conn->query("DELETE FROM order_items WHERE order_id=$id");
-    $conn->query("DELETE FROM orders WHERE id=$id");
-    header("Location: admin_orders.php?view=orders&msg=Deleted");
-    exit;
+    $conn->begin_transaction();
+    try {
+        $items_res = $conn->query("SELECT product_id, qty FROM order_items WHERE order_id=$id");
+        if ($items_res) {
+            while ($item = $items_res->fetch_assoc()) {
+                $p_id = intval($item['product_id']);
+                $qty = floatval($item['qty']);
+
+                $prod_res = $conn->query("SELECT product_type, seed_id FROM products WHERE id=$p_id");
+                if ($prod_res && $prod = $prod_res->fetch_assoc()) {
+                    $p_type = strtolower($prod['product_type']);
+                    $s_id = intval($prod['seed_id']);
+
+                    if ($p_type == 'cake' || $p_type == 'raw_oil') {
+                        $db_type = ($p_type == 'cake') ? 'CAKE' : 'OIL';
+                        $note = "Stock Returned - Order Deleted #$id";
+                        $stmtInv = $conn->prepare("INSERT INTO raw_material_inventory (seed_id, product_type, transaction_type, quantity, unit, source_type, notes, transaction_date) VALUES (?, ?, 'RAW_IN', ?, 'KG', 'ADJUSTMENT', ?, NOW())");
+                        $stmtInv->bind_param("isds", $s_id, $db_type, $qty, $note);
+                        $stmtInv->execute();
+                    } elseif ($p_type == 'seed') {
+                        $conn->query("UPDATE seeds_master SET current_stock = current_stock + $qty WHERE id = $s_id");
+                    } else {
+                        $stmtPack = $conn->prepare("INSERT INTO inventory_products (product_id, qty, unit, transaction_type, created_at) VALUES (?, ?, 'Pcs', 'RETURN', NOW())");
+                        $stmtPack->bind_param("id", $p_id, $qty);
+                        $stmtPack->execute();
+                    }
+                }
+            }
+        }
+        $conn->query("DELETE FROM order_items WHERE order_id=$id");
+        $conn->query("DELETE FROM orders WHERE id=$id");
+        $conn->commit();
+        header("Location: admin_orders.php?view=orders&msg=Order Deleted & Stock Returned");
+        exit;
+    } catch (Exception $e) {
+        $conn->rollback();
+        die("Error returning stock: " . $e->getMessage());
+    }
 }
 
 // --- DATA FETCHING ---
 $view = $_GET['view'] ?? 'orders';
-// --- LIVE DASHBOARD STATS (SALES) ---
 $today_date = date('Y-m-d');
 
-// 1. Aaj ke Orders
 $q1 = $conn->query("SELECT COUNT(id) as cnt FROM orders WHERE DATE(created_at) = '$today_date'");
 $today_orders = $q1->fetch_assoc()['cnt'] ?? 0;
 
-// 2. Aaj ki Sale
 $q2 = $conn->query("SELECT SUM(total) as amt FROM orders WHERE DATE(created_at) = '$today_date'");
 $today_sale = $q2->fetch_assoc()['amt'] ?? 0;
 
-// 3. Pending Packing
 $q3 = $conn->query("SELECT COUNT(id) as cnt FROM orders WHERE status = 'Pending'");
 $pending_packing = $q3->fetch_assoc()['cnt'] ?? 0;
 
-// 4. Unpaid Amount
 $q4 = $conn->query("SELECT SUM(total - paid_amount) as amt FROM orders WHERE payment_status != 'Paid'");
 $unpaid_amount = $q4->fetch_assoc()['amt'] ?? 0;
 
@@ -123,14 +208,23 @@ $search = $_GET['search'] ?? '';
 $date_filter = $_GET['date'] ?? '';
 $status_filter = $_GET['status_filter'] ?? '';
 
-$active_list = [];
+// We now need 3 lists for Services: Processing, Completed (Ready), and History
+$processing_list = [];
+$completed_list = [];
 $history_list = [];
 
 if ($view === 'services') {
-    $sql_act = "SELECT s.*, c.name as customer_name, c.phone FROM service_orders s LEFT JOIN customers c ON s.user_id = c.id WHERE s.status IN ('Pending', 'Processing') ORDER BY s.service_date DESC";
-    $res_act = $conn->query($sql_act);
-    if ($res_act) while ($r = $res_act->fetch_assoc()) $active_list[] = $r;
+    // Stage 1: Machine Processing (Pending / Processing)
+    $sql_proc = "SELECT s.*, c.name as customer_name, c.phone FROM service_orders s LEFT JOIN customers c ON s.user_id = c.id WHERE s.status IN ('Pending', 'Processing') ORDER BY s.service_date DESC";
+    $res_proc = $conn->query($sql_proc);
+    if ($res_proc) while ($r = $res_proc->fetch_assoc()) $processing_list[] = $r;
 
+    // Stage 2: Ready for Delivery (Completed)
+    $sql_comp = "SELECT s.*, c.name as customer_name, c.phone FROM service_orders s LEFT JOIN customers c ON s.user_id = c.id WHERE s.status = 'Completed' ORDER BY s.service_date DESC";
+    $res_comp = $conn->query($sql_comp);
+    if ($res_comp) while ($r = $res_comp->fetch_assoc()) $completed_list[] = $r;
+
+    // History (Delivered or filtered)
     $where = "1=1";
     if ($search) $where .= " AND (c.name LIKE '%$search%' OR c.phone LIKE '%$search%')";
     if ($date_filter) $where .= " AND DATE(s.service_date) = '$date_filter'";
@@ -140,6 +234,7 @@ if ($view === 'services') {
     $res_hist = $conn->query($sql_hist);
     if ($res_hist) while ($r = $res_hist->fetch_assoc()) $history_list[] = $r;
 } else {
+    $active_list = [];
     $sql_act = "SELECT o.*, c.name as customer_name FROM orders o LEFT JOIN customers c ON o.customer_id = c.id WHERE o.status IN ('pending', 'ReadyToShip', 'Shipped') ORDER BY o.created_at DESC";
     $res_act = $conn->query($sql_act);
     if ($res_act) while ($r = $res_act->fetch_assoc()) $active_list[] = $r;
@@ -240,13 +335,12 @@ if ($view === 'services') {
             width: 100%;
         }
 
-        /* RUNNING JOBS (Horizontal Scroll) */
         .jobs-grid {
             display: flex;
             flex-wrap: nowrap;
             overflow-x: auto;
             gap: 15px;
-            margin-bottom: 30px;
+            margin-bottom: 25px;
             padding-bottom: 10px;
             width: 100%;
             -webkit-overflow-scrolling: touch;
@@ -271,14 +365,21 @@ if ($view === 'services') {
             border: 1px solid var(--border);
             border-radius: 8px;
             overflow: hidden;
-            border-top: 4px solid var(--primary);
             font-size: 0.85rem;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
-            min-width: 320px;
-            max-width: 320px;
+            min-width: 330px;
+            max-width: 330px;
             flex: 0 0 auto;
             display: flex;
             flex-direction: column;
+        }
+
+        .job-card.processing {
+            border-top: 4px solid var(--warning);
+        }
+
+        .job-card.ready {
+            border-top: 4px solid var(--success);
         }
 
         .job-header {
@@ -312,11 +413,10 @@ if ($view === 'services') {
             background: #f8fafc;
             border-top: 1px solid var(--border);
             display: flex;
+            flex-direction: column;
             gap: 8px;
-            align-items: center;
         }
 
-        /* FILTER BAR */
         .filter-bar {
             display: flex;
             gap: 12px;
@@ -335,7 +435,6 @@ if ($view === 'services') {
             min-width: 150px;
         }
 
-        /* SUGGESTIONS */
         .suggestions {
             position: absolute;
             background: white;
@@ -363,12 +462,17 @@ if ($view === 'services') {
         }
 
         .section-title {
-            font-size: 0.9rem;
+            font-size: 1rem;
             margin-bottom: 12px;
-            color: #64748b;
+            color: #1e293b;
             text-transform: uppercase;
-            font-weight: 700;
+            font-weight: 800;
             letter-spacing: 0.5px;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         @media (max-width: 1024px) {
@@ -415,15 +519,6 @@ if ($view === 'services') {
             .filter-item {
                 width: 100%;
             }
-
-            .job-footer {
-                flex-direction: column;
-            }
-
-            .job-footer select,
-            .job-footer button {
-                width: 100%;
-            }
         }
     </style>
 </head>
@@ -434,7 +529,9 @@ if ($view === 'services') {
 
     <div class="container">
         <?php if (isset($_GET['msg'])): ?>
-            <div class="alert"><i class="fas fa-check-circle"></i> Action Completed Successfully!</div>
+            <div class="alert" style="padding:10px 15px; background:#dcfce7; color:#166534; border-radius:6px; margin-bottom:15px; border:1px solid #bbf7d0; font-weight:600;">
+                <i class="fas fa-check-circle"></i> Action Completed Successfully!
+            </div>
         <?php endif; ?>
 
         <div class="page-header card" style="padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 25px;">
@@ -501,35 +598,26 @@ if ($view === 'services') {
                     </div>
                 <?php else: ?>
                     <div class="card">
-                        <div class="card-header">
-                            <span><i class="fas fa-chart-pie text-primary" style="margin-right:8px;"></i> Live Sales Dashboard</span>
-                        </div>
-
+                        <div class="card-header"><span><i class="fas fa-chart-pie text-primary" style="margin-right:8px;"></i> Live Sales Dashboard</span></div>
                         <div style="padding: 20px;">
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-
                                 <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px 10px; border-radius: 8px; text-align: center;">
                                     <div style="color: #64748b; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-bottom: 5px;">Today's Orders</div>
                                     <div style="font-size: 1.5rem; font-weight: 800; color: #0f172a;"><?= $today_orders ?></div>
                                 </div>
-
                                 <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 15px 10px; border-radius: 8px; text-align: center;">
                                     <div style="color: #166534; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-bottom: 5px;">Today's Sale</div>
                                     <div style="font-size: 1.3rem; font-weight: 800; color: #15803d;">₹<?= number_format($today_sale) ?></div>
                                 </div>
-
                                 <div style="background: #fff7ed; border: 1px solid #ffedd5; padding: 15px 10px; border-radius: 8px; text-align: center;">
                                     <div style="color: #c2410c; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-bottom: 5px;">Pending Pack</div>
                                     <div style="font-size: 1.5rem; font-weight: 800; color: #ea580c;"><?= $pending_packing ?></div>
                                 </div>
-
                                 <div style="background: #fef2f2; border: 1px solid #fecaca; padding: 15px 10px; border-radius: 8px; text-align: center;">
                                     <div style="color: #b91c1c; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-bottom: 5px;">Total Unpaid</div>
                                     <div style="font-size: 1.3rem; font-weight: 800; color: #dc2626;">₹<?= number_format($unpaid_amount) ?></div>
                                 </div>
-
                             </div>
-
                             <div style="margin-top: 20px;">
                                 <a href="?view=orders&status_filter=Pending" class="btn btn-primary" style="display: flex; justify-content: center; align-items: center; gap: 8px; width:100%;">
                                     <i class="fas fa-box-open"></i> View Pending Orders
@@ -541,13 +629,12 @@ if ($view === 'services') {
             </aside>
 
             <main>
-                <div class="section-title">Running Jobs</div>
+                <?php if ($view === 'services'): ?>
 
-                <div class="jobs-grid">
-                    <?php if (!empty($active_list)): foreach ($active_list as $row): ?>
-
-                            <?php if ($view === 'services'): ?>
-                                <div class="job-card" style="border-top-color: var(--warning);">
+                    <div class="section-title"><i class="fas fa-cogs text-warning"></i> Stage 1: Machine Processing</div>
+                    <div class="jobs-grid">
+                        <?php if (!empty($processing_list)): foreach ($processing_list as $row): ?>
+                                <div class="job-card processing">
                                     <div class="job-header">
                                         <strong style="font-size:1rem;">#<?= $row['id'] ?></strong>
                                         <span class="badge st-<?= strtolower($row['status']) ?>"><?= $row['status'] ?></span>
@@ -556,50 +643,94 @@ if ($view === 'services') {
                                         <div class="job-row"><span>Customer:</span> <strong><?= htmlspecialchars($row['customer_name']) ?></strong></div>
                                         <div class="job-row"><span>Seed / Item:</span> <?= htmlspecialchars($row['seed_type']) ?></div>
                                         <div class="job-row"><span>Inward Weight:</span> <?= $row['weight_kg'] ?> Kg</div>
-
-                                        <div class="job-row">
-                                            <span>Payment:</span>
-                                            <span class="badge st-<?= strtolower($row['payment_status'] ?? 'pending') ?>">
-                                                <?= htmlspecialchars($row['payment_status'] ?? 'Pending') ?>
-                                            </span>
-                                        </div>
-
                                         <div class="job-row" style="color:var(--primary); font-weight:700; font-size:1rem; margin-top:12px; border-top:1px dashed #e2e8f0; padding-top:12px;">
                                             <span>Bill Amount:</span> ₹<?= number_format($row['total_amount'], 2) ?>
                                         </div>
                                     </div>
                                     <form method="POST" class="job-footer">
                                         <input type="hidden" name="service_id" value="<?= $row['id'] ?>">
-
-                                        <div style="display:flex; width:100%; gap:8px;">
-                                            <select name="status" class="form-input" style="flex:1; padding: 8px;">
-                                                <option <?= $row['status'] == 'Pending' ? 'selected' : '' ?>>Pending</option>
-                                                <option <?= $row['status'] == 'Processing' ? 'selected' : '' ?>>Processing</option>
-                                                <option <?= $row['status'] == 'Completed' ? 'selected' : '' ?>>Completed</option>
-                                                <option <?= $row['status'] == 'Delivered' ? 'selected' : '' ?>>Delivered</option>
-                                            </select>
-
-                                            <select name="payment_status" class="form-input" style="flex:1; padding: 8px;">
-                                                <option value="Pending" <?= ($row['payment_status'] ?? 'Pending') == 'Pending' ? 'selected' : '' ?>>Unpaid</option>
-                                                <option value="Paid" <?= ($row['payment_status'] ?? 'Pending') == 'Paid' ? 'selected' : '' ?>>Paid</option>
-                                            </select>
+                                        <div style="background:#fffbeb; padding:10px; border-radius:6px; border:1px solid #fde68a;">
+                                            <div style="font-size:0.75rem; font-weight:700; color:#b45309; margin-bottom:5px;">ENTER OUTPUT TO COMPLETE</div>
+                                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                                                <div>
+                                                    <input type="number" name="oil_returned" step="0.01" class="form-input" style="padding:6px; font-size:0.85rem;" placeholder="Oil (Kg)" required>
+                                                </div>
+                                                <div>
+                                                    <input type="number" name="cake_returned" step="0.01" class="form-input" style="padding:6px; font-size:0.85rem;" placeholder="Cake (Kg)" required>
+                                                </div>
+                                            </div>
                                         </div>
 
-                                        <?php if ($row['status'] != 'Pending'): ?>
-                                            <div style="display:flex; width:100%; gap:8px; margin-top:5px;">
-                                                <input type="number" name="oil_returned" step="0.01" placeholder="Oil (kg)" class="form-input" style="flex:1; padding: 8px;" value="<?= $row['oil_returned'] ?>">
-                                                <input type="number" name="cake_returned" step="0.01" placeholder="Cake (kg)" class="form-input" style="flex:1; padding: 8px;" value="<?= $row['cake_returned'] ?>">
-                                            </div>
-                                        <?php endif; ?>
+                                        <input type="hidden" name="status" value="Completed">
 
-                                        <div style="display:flex; gap:8px; width:100%; margin-top:5px;">
-                                            <button type="submit" name="update_service_status" class="btn btn-primary" style="flex:1; padding:8px;"><i class="fas fa-save" style="margin-right:5px;"></i> Update</button>
+                                        <div style="display:flex; gap:8px; width:100%;">
+                                            <button type="submit" name="update_service_status" class="btn btn-warning" style="flex:1; padding:8px;"><i class="fas fa-check-circle"></i> Mark Completed</button>
+                                            <button type="button" onclick='editJobWork(<?= json_encode($row) ?>)' class="btn btn-outline" style="padding:8px 12px; color:var(--text-main);" title="Edit Job"><i class="fas fa-edit"></i></button>
+                                        </div>
+                                    </form>
+                                </div>
+                            <?php endforeach;
+                        else: ?>
+                            <div style="flex:1; padding:20px; text-align:center; font-size:0.95rem; color:#94a3b8; border:1px dashed #cbd5e1; border-radius:8px; background:white;">No active jobs on machine.</div>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="section-title" style="margin-top:20px;"><i class="fas fa-box-open text-success"></i> Stage 2: Ready For Delivery</div>
+                    <div class="jobs-grid">
+                        <?php if (!empty($completed_list)): foreach ($completed_list as $row): ?>
+                                <div class="job-card ready">
+                                    <div class="job-header">
+                                        <strong style="font-size:1rem;">#<?= $row['id'] ?></strong>
+                                        <span class="badge st-completed">Ready</span>
+                                    </div>
+                                    <div class="job-body">
+                                        <div class="job-row"><span>Customer:</span> <strong><?= htmlspecialchars($row['customer_name']) ?></strong></div>
+                                        <div class="job-row"><span>Item Processed:</span> <?= htmlspecialchars($row['seed_type']) ?></div>
+                                        <div class="job-row" style="background:#f1f5f9; padding:8px; border-radius:6px;">
+                                            <span style="font-size:0.8rem;">OUTPUT:</span>
+                                            <strong>Oil: <?= $row['oil_returned'] ?>Kg | Cake: <?= $row['cake_returned'] ?>Kg</strong>
+                                        </div>
+                                        <div class="job-row" style="color:var(--primary); font-weight:700; font-size:1rem; margin-top:12px; border-top:1px dashed #e2e8f0; padding-top:12px;">
+                                            <span>Bill Amount:</span> ₹<?= number_format($row['total_amount'], 2) ?>
+                                        </div>
+                                    </div>
+                                    <form method="POST" class="job-footer">
+                                        <input type="hidden" name="service_id" value="<?= $row['id'] ?>">
+                                        <input type="hidden" name="status" value="Delivered">
+                                        <div style="padding:10px; border-radius:6px; border:1px solid #e2e8f0; background:#fff;">
+                                            <div style="margin-bottom:10px;">
+                                                <label style="font-size:0.7rem; font-weight:700; color:var(--text-muted);">CAKE SETTLEMENT</label>
+                                                <select name="cake_settlement" class="form-input" style="padding:6px; font-size:0.85rem; border-color:#f59e0b; background:#fffbeb;" onchange="autoWaivePayment(this)">
+                                                    <option value="customer">कस्टमर खल ले गया (Customer Took Cake)</option>
+                                                    <option value="factory">फैक्ट्री ने खल रख ली (Factory Kept Cake)</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label style="font-size:0.7rem; font-weight:700; color:var(--text-muted);">PAYMENT STATUS</label>
+                                                <select name="payment_status" class="form-input" style="padding: 6px; font-size:0.85rem; font-weight:600;">
+                                                    <option value="Pending" <?= ($row['payment_status'] ?? 'Pending') == 'Pending' ? 'selected' : '' ?>>Unpaid (Payment Due)</option>
+                                                    <option value="Paid" <?= ($row['payment_status'] ?? 'Pending') == 'Paid' ? 'selected' : '' ?>>Paid (Cash Received)</option>
+                                                    <option value="Waived (Cake Kept)" style="display:none;">Fee Waived (Hidden)</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div style="display:flex; gap:8px; width:100%;">
+                                            <button type="submit" name="update_service_status" class="btn btn-success" style="flex:1; padding:8px; background:var(--success); border-color:var(--success); color:white;"><i class="fas fa-truck"></i> Deliver Order</button>
                                             <a href="#" onclick="openPrintEngine('job_sticker', <?= $row['id'] ?>)" class="btn btn-outline" style="padding:8px 12px;" title="Print Slip"><i class="fas fa-print text-primary"></i></a>
                                         </div>
                                     </form>
                                 </div>
+                            <?php endforeach;
+                        else: ?>
+                            <div style="flex:1; padding:20px; text-align:center; font-size:0.95rem; color:#94a3b8; border:1px dashed #cbd5e1; border-radius:8px; background:white;">No jobs ready for delivery right now.</div>
+                        <?php endif; ?>
+                    </div>
 
-                            <?php else: ?>
+                <?php else: ?>
+                    <div class="section-title"><i class="fas fa-box"></i> Active Sales Orders</div>
+                    <div class="jobs-grid">
+                        <?php if (!empty($active_list)): foreach ($active_list as $row): ?>
                                 <div class="job-card" style="border-top-color:#3b82f6;">
                                     <div class="job-header">
                                         <strong style="color:#3b82f6; font-size:1rem;">#<?= $row['order_no'] ?></strong>
@@ -612,7 +743,7 @@ if ($view === 'services') {
                                             <span>Total Value:</span> ₹<?= number_format($row['total'], 2) ?>
                                         </div>
                                     </div>
-                                    <form method="POST" class="job-footer">
+                                    <form method="POST" class="job-footer" style="flex-direction:row;">
                                         <input type="hidden" name="order_id" value="<?= $row['id'] ?>">
                                         <div style="display:flex; width:100%; gap:8px;">
                                             <select name="order_status" class="form-input" style="flex:2; padding: 8px;">
@@ -629,15 +760,14 @@ if ($view === 'services') {
                                         </div>
                                     </form>
                                 </div>
-                            <?php endif; ?>
+                            <?php endforeach;
+                        else: ?>
+                            <div style="flex:1; padding:30px; text-align:center; font-size:0.95rem; color:#94a3b8; border:1px dashed #cbd5e1; border-radius:8px; background:white;">No active sales orders.</div>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
 
-                        <?php endforeach;
-                    else: ?>
-                        <div style="flex:1; padding:30px; text-align:center; font-size:0.95rem; color:#94a3b8; border:1px dashed #cbd5e1; border-radius:8px; background:white;">No active running jobs right now.</div>
-                    <?php endif; ?>
-                </div>
-
-                <div class="section-title">History & Filters</div>
+                <div class="section-title" style="margin-top:20px;"><i class="fas fa-history text-muted"></i> History & Filters</div>
 
                 <form method="GET" class="filter-bar">
                     <input type="hidden" name="view" value="<?= $view ?>">
@@ -709,7 +839,7 @@ if ($view === 'services') {
                                             <td><span class="badge st-<?= strtolower($row['status']) ?>"><?= $row['status'] ?></span></td>
                                             <td style="text-align:right; white-space:nowrap;">
                                                 <a href="#" onclick="openPrintEngine('job_sticker', <?= $row['id'] ?>)" class="btn-icon print" title="Print Slip"><i class="fas fa-print"></i></a>
-                                                <a href="?view=services&delete_service=<?= $row['id'] ?>" onclick="return confirm('Are you sure you want to delete this Job?')" class="btn-icon delete" title="Delete"><i class="fas fa-trash"></i></a>
+                                                <a href="?view=services&delete_service=<?= $row['id'] ?>" onclick="return confirm('Are you sure you want to delete this Job? (If factory kept the cake, stock will be reversed)')" class="btn-icon delete" title="Delete"><i class="fas fa-trash"></i></a>
                                             </td>
                                         </tr>
                                     <?php else: ?>
@@ -725,7 +855,7 @@ if ($view === 'services') {
                                             <td><span class="badge st-<?= strtolower($row['payment_status']) ?>"><?= $row['payment_status'] ?></span></td>
                                             <td><span class="badge st-<?= strtolower($row['status']) ?>"><?= $row['status'] ?></span></td>
                                             <td style="text-align:right;">
-                                                <a href="?view=orders&delete_order=<?= $row['id'] ?>" onclick="return confirm('Are you sure you want to delete this Order?')" class="btn-icon delete"><i class="fas fa-trash"></i></a>
+                                                <a href="?view=orders&delete_order=<?= $row['id'] ?>" onclick="return confirm('Are you sure you want to delete this Order? (Stock will be returned automatically)')" class="btn-icon delete"><i class="fas fa-trash"></i></a>
                                             </td>
                                         </tr>
                                     <?php endif; ?>
@@ -739,8 +869,46 @@ if ($view === 'services') {
                         </tbody>
                     </table>
                 </div>
-
             </main>
+        </div>
+    </div>
+
+    <div id="editJobModal" class="global-modal">
+        <div class="g-modal-content" style="max-width:400px;">
+            <div class="g-modal-header">
+                <h3 style="margin:0; font-size:1.1rem;"><i class="fas fa-edit text-warning" style="margin-right:8px;"></i> Edit Job Details</h3>
+                <button class="g-close-btn" onclick="closeEditJob()">&times;</button>
+            </div>
+            <div class="g-modal-body">
+                <form method="POST">
+                    <input type="hidden" name="edit_job_id" id="ej_id">
+                    <input type="hidden" name="edit_service_order" value="1">
+
+                    <div class="form-group" style="margin-bottom:15px;">
+                        <label class="form-label">Customer Name</label>
+                        <input type="text" id="ej_cust" class="form-input" readonly style="background:#f1f5f9; color:#64748b;">
+                    </div>
+                    <div class="form-group" style="margin-bottom:15px;">
+                        <label class="form-label">Seed Processed</label>
+                        <input type="text" id="ej_seed" class="form-input" readonly style="background:#f1f5f9; color:#64748b;">
+                    </div>
+                    <div style="display:flex; gap:10px; margin-bottom:15px;">
+                        <div class="form-group" style="flex:1;">
+                            <label class="form-label">Weight (Kg)</label>
+                            <input type="number" name="e_weight_kg" id="ej_wt" step="0.01" class="form-input" required>
+                        </div>
+                        <div class="form-group" style="flex:1;">
+                            <label class="form-label">Rate (₹)</label>
+                            <input type="number" name="e_rate_per_kg" id="ej_rt" step="0.01" class="form-input" required>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:20px;">
+                        <label class="form-label">Notes</label>
+                        <input type="text" name="e_notes" id="ej_note" class="form-input">
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width:100%; padding:10px;"><i class="fas fa-save"></i> Save Changes</button>
+                </form>
+            </div>
         </div>
     </div>
 
@@ -762,6 +930,22 @@ if ($view === 'services') {
     </div>
 
     <script>
+        // --- SMART CAKE SETTLEMENT LOGIC ---
+        function autoWaivePayment(selectElement) {
+            const form = selectElement.closest('form');
+            const payStatusSelect = form.querySelector('[name="payment_status"]');
+
+            if (selectElement.value === 'factory') {
+                payStatusSelect.value = 'Waived (Cake Kept)';
+                payStatusSelect.style.backgroundColor = '#dcfce7';
+                payStatusSelect.style.color = '#166534';
+            } else {
+                payStatusSelect.value = 'Paid';
+                payStatusSelect.style.backgroundColor = '';
+                payStatusSelect.style.color = '';
+            }
+        }
+
         // --- 1. Dynamic Print Engine Opener ---
         function openPrintEngine(docType, refId) {
             window.open(`print_engine.php?doc=${docType}&id=${refId}`, 'PrintWindow', 'width=400,height=600');
@@ -833,20 +1017,33 @@ if ($view === 'services') {
             sList.style.display = 'none';
         }
 
+        // --- 5. EDIT JOB WORK JS ---
+        function editJobWork(data) {
+            document.getElementById('ej_id').value = data.id;
+            document.getElementById('ej_cust').value = data.customer_name;
+            document.getElementById('ej_seed').value = data.seed_type;
+            document.getElementById('ej_wt').value = data.weight_kg;
+            document.getElementById('ej_rt').value = data.rate_per_kg;
+            document.getElementById('ej_note').value = data.notes || '';
+            document.getElementById('editJobModal').classList.add('active');
+        }
+
+        function closeEditJob() {
+            document.getElementById('editJobModal').classList.remove('active');
+        }
+
         // --- GLOBAL ORDER VIEWER JS ---
         function viewOrderDetails(orderId) {
             const modal = document.getElementById('globalOrderModal');
             const body = document.getElementById('globalOrderBody');
 
-            // Show modal with loading state
             modal.classList.add('active');
             body.innerHTML = '<div style="text-align:center; padding:40px; color:#94a3b8;"><i class="fas fa-spinner fa-spin fa-2x"></i><br><br>Loading order details...</div>';
 
-            // Fetch data from our new PHP file
             fetch(`ajax_order_details.php?id=${orderId}`)
                 .then(response => response.text())
                 .then(html => {
-                    body.innerHTML = html; // Inject the design
+                    body.innerHTML = html;
                 })
                 .catch(err => {
                     body.innerHTML = '<div style="color:red; text-align:center; padding:20px;">Failed to load order details. Please try again.</div>';
@@ -857,12 +1054,10 @@ if ($view === 'services') {
             document.getElementById('globalOrderModal').classList.remove('active');
         }
 
-        // Close modal when clicking outside
+        // Close modals when clicking outside
         window.onclick = function(event) {
-            const modal = document.getElementById('globalOrderModal');
-            if (event.target == modal) {
-                closeGlobalOrder();
-            }
+            if (event.target == document.getElementById('globalOrderModal')) closeGlobalOrder();
+            if (event.target == document.getElementById('editJobModal')) closeEditJob();
         }
     </script>
 </body>

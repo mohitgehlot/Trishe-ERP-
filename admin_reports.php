@@ -1,5 +1,5 @@
 <?php
-// admin_reports.php - MASTER REPORTS WITH GRAPHS (CHART.JS)
+// admin_reports.php - MASTER REPORTS WITH GRAPHS (ORIGINAL DESIGN + NEW FY/LIFETIME LOGIC)
 include 'config.php';
 session_start();
 
@@ -15,9 +15,18 @@ $end_date = $_GET['end_date'] ?? date('Y-m-d');
 $start_safe = $conn->real_escape_string($start_date . " 00:00:00");
 $end_safe = $conn->real_escape_string($end_date . " 23:59:59");
 
+// 2. FINANCIAL YEAR LOGIC (1st April to 31st March)
+$current_month = (int)date('m');
+$current_year = (int)date('Y');
+$fy_start_year = ($current_month >= 4) ? $current_year : $current_year - 1;
+$fy_start_date = $fy_start_year . "-04-01 00:00:00";
+
+
 // ==============================================
 // 1. SALES REPORT DATA
 // ==============================================
+
+// Filtered Stats (For the selected dates)
 $sales_stats = $conn->query("
     SELECT 
         COUNT(id) as total_bills,
@@ -28,24 +37,28 @@ $sales_stats = $conn->query("
     WHERE created_at BETWEEN '$start_safe' AND '$end_safe'
 ")->fetch_assoc();
 
-// (A) For Line Chart (Daily Sales)
-$daily_dates = [];
-$daily_totals = [];
-$daily_q = $conn->query("
-    SELECT DATE(created_at) as sale_date, SUM(total) as daily_total
-    FROM orders
-    WHERE created_at BETWEEN '$start_safe' AND '$end_safe'
-    GROUP BY DATE(created_at)
-    ORDER BY sale_date ASC
+// Financial Year & Lifetime Stats
+$sales_fy = $conn->query("SELECT COALESCE(SUM(total), 0) as rev FROM orders WHERE created_at >= '$fy_start_date'")->fetch_assoc();
+$sales_life = $conn->query("SELECT COALESCE(SUM(total), 0) as rev FROM orders")->fetch_assoc();
+
+// (A) For Line Chart (Monthly Sales Trend - Last 12 Months)
+$sales_m_labels = [];
+$sales_m_rev = [];
+$sales_m_q = $conn->query("
+    SELECT DATE_FORMAT(created_at, '%b %Y') as month_name, COALESCE(SUM(total),0) as rev 
+    FROM orders 
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH) 
+    GROUP BY YEAR(created_at), MONTH(created_at) 
+    ORDER BY YEAR(created_at), MONTH(created_at)
 ");
-if ($daily_q) {
-    while ($r = $daily_q->fetch_assoc()) {
-        $daily_dates[] = date('d M', strtotime($r['sale_date']));
-        $daily_totals[] = (float)$r['daily_total'];
+if ($sales_m_q) {
+    while ($r = $sales_m_q->fetch_assoc()) {
+        $sales_m_labels[] = $r['month_name'];
+        $sales_m_rev[] = (float)$r['rev'];
     }
 }
 
-// (B) For Doughnut Chart (Payment Modes)
+// (B) For Doughnut Chart (Payment Modes - Filtered)
 $mode_labels = [];
 $mode_totals = [];
 $mode_q = $conn->query("SELECT payment_method, SUM(total) as amt FROM orders WHERE created_at BETWEEN '$start_safe' AND '$end_safe' GROUP BY payment_method");
@@ -68,6 +81,8 @@ $sales_list = $conn->query("
 // ==============================================
 // 2. JOB WORK REPORT DATA
 // ==============================================
+
+// Filtered Stats
 $job_stats = $conn->query("
     SELECT 
         COUNT(id) as total_jobs,
@@ -77,7 +92,28 @@ $job_stats = $conn->query("
     WHERE service_date BETWEEN '$start_safe' AND '$end_safe'
 ")->fetch_assoc();
 
-// (C) For Bar Chart (Jobs by Seed)
+// Financial Year & Lifetime Stats
+$job_fy = $conn->query("SELECT COALESCE(SUM(total_amount), 0) as rev FROM service_orders WHERE service_date >= '$fy_start_date'")->fetch_assoc();
+$job_life = $conn->query("SELECT COALESCE(SUM(total_amount), 0) as rev FROM service_orders")->fetch_assoc();
+
+// (C) For Line Chart (Monthly Job Work Trend - Last 12 Months)
+$jw_m_labels = [];
+$jw_m_rev = [];
+$jw_m_q = $conn->query("
+    SELECT DATE_FORMAT(service_date, '%b %Y') as month_name, COALESCE(SUM(total_amount),0) as rev 
+    FROM service_orders 
+    WHERE service_date >= DATE_SUB(NOW(), INTERVAL 12 MONTH) 
+    GROUP BY YEAR(service_date), MONTH(service_date) 
+    ORDER BY YEAR(service_date), MONTH(service_date)
+");
+if ($jw_m_q) {
+    while ($r = $jw_m_q->fetch_assoc()) {
+        $jw_m_labels[] = $r['month_name'];
+        $jw_m_rev[] = (float)$r['rev'];
+    }
+}
+
+// (D) For Bar Chart (Jobs by Seed - Filtered)
 $seed_labels = [];
 $seed_weights = [];
 $seed_q = $conn->query("SELECT seed_type, SUM(weight_kg) as wt, SUM(total_amount) as amt FROM service_orders WHERE service_date BETWEEN '$start_safe' AND '$end_safe' GROUP BY seed_type");
@@ -119,74 +155,385 @@ $stock_list = $conn->query("
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
         :root {
-            --primary: #4f46e5; --bg: #f1f5f9; --card: #ffffff; --text: #0f172a; --border: #e2e8f0;
-            --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
-            --radius: 10px; --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            --primary: #4f46e5;
+            --bg: #f1f5f9;
+            --card: #ffffff;
+            --text: #0f172a;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --radius: 10px;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); padding-left: 260px; padding-bottom: 60px; }
-        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            padding-left: 260px;
+            padding-bottom: 60px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
 
         /* Header */
-        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: var(--card); padding: 15px 20px; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow); flex-wrap: wrap; gap: 15px; }
-        .page-title { font-size: 1.3rem; font-weight: 700; display: flex; align-items: center; gap: 10px; margin: 0; }
-        .date-filter { display: flex; gap: 10px; align-items: center; background: #f8fafc; padding: 8px; border-radius: 8px; border: 1px solid var(--border); flex-wrap: wrap; }
-        .date-filter input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; }
-        .btn { padding: 9px 15px; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 5px; text-decoration: none; }
-        .btn-excel { background: #16a34a; }
-        .btn-print { background: #475569; }
+        .header-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            background: var(--card);
+            padding: 15px 20px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .page-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0;
+        }
+
+        .date-filter {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            background: #f8fafc;
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            flex-wrap: wrap;
+        }
+
+        .date-filter input {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+
+        .btn {
+            padding: 9px 15px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            text-decoration: none;
+        }
+
+        .btn-excel {
+            background: #16a34a;
+        }
+
+        .btn-print {
+            background: #475569;
+        }
 
         /* Tabs */
-        .tabs { display: flex; gap: 10px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 5px; }
-        .tab-btn { padding: 12px 20px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; font-weight: 600; font-size: 0.95rem; color: #64748b; white-space: nowrap; box-shadow: var(--shadow); transition: 0.2s; }
-        .tab-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; animation: fadeIn 0.3s; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            overflow-x: auto;
+            padding-bottom: 5px;
+        }
+
+        .tab-btn {
+            padding: 12px 20px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: #64748b;
+            white-space: nowrap;
+            box-shadow: var(--shadow);
+            transition: 0.2s;
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
 
         /* Summary Cards */
-        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .summary-card { background: var(--card); padding: 20px; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow); }
-        .summary-title { font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 5px; }
-        .summary-value { font-size: 1.6rem; font-weight: 800; color: var(--text); }
-        .summary-value.green { color: var(--success); }
-        .summary-value.red { color: var(--danger); }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .summary-card {
+            background: var(--card);
+            padding: 20px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+        }
+
+        .summary-title {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .summary-value {
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: var(--text);
+        }
+
+        .summary-value.green {
+            color: var(--success);
+        }
+
+        .summary-value.red {
+            color: var(--danger);
+        }
+
+        .summary-value.blue {
+            color: var(--primary);
+        }
 
         /* Chart Containers */
-        .chart-row { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px; }
-        .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
-        .chart-title { font-size: 1rem; font-weight: 700; margin-bottom: 15px; color: #334155; border-bottom: 1px dashed var(--border); padding-bottom: 10px; }
-        .canvas-container { position: relative; height: 300px; width: 100%; }
+        .chart-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .chart-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            box-shadow: var(--shadow);
+        }
+
+        .chart-title {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #334155;
+            border-bottom: 1px dashed var(--border);
+            padding-bottom: 10px;
+        }
+
+        .canvas-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
 
         /* Tables */
-        .table-card { background: var(--card); border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow); overflow: hidden; margin-bottom: 20px; }
-        .table-header { padding: 15px 20px; border-bottom: 1px solid var(--border); background: #f8fafc; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
-        .table-responsive { overflow-x: auto; max-height: 400px; }
-        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: left; }
-        th { padding: 12px 15px; font-weight: 600; color: #475569; border-bottom: 1px solid var(--border); background: #fff; position: sticky; top: 0; z-index: 1; }
-        td { padding: 12px 15px; border-bottom: 1px dashed var(--border); color: #334155; }
-        tr:hover { background: #f8fafc; }
-        
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }
+        .table-card {
+            background: var(--card);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .table-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--border);
+            background: #f8fafc;
+            font-weight: 700;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+            max-height: 400px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            text-align: left;
+        }
+
+        th {
+            padding: 12px 15px;
+            font-weight: 600;
+            color: #475569;
+            border-bottom: 1px solid var(--border);
+            background: #fff;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px dashed var(--border);
+            color: #334155;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        .badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
 
         /* Global Modal Styles */
-        .global-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
-        .global-modal.active { display: flex; animation: fadeInModal 0.2s; }
-        .g-modal-content { background: #fff; width: 90%; max-width: 600px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2); overflow: hidden; position: relative; }
-        .g-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
-        .g-modal-body { padding: 20px; max-height: 70vh; overflow-y: auto; }
-        .g-close-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b; line-height: 1; }
-        @keyframes fadeInModal { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .global-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(2px);
+        }
+
+        .global-modal.active {
+            display: flex;
+            animation: fadeInModal 0.2s;
+        }
+
+        .g-modal-content {
+            background: #fff;
+            width: 90%;
+            max-width: 600px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .g-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .g-modal-body {
+            padding: 20px;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .g-close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #64748b;
+            line-height: 1;
+        }
+
+        @keyframes fadeInModal {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
 
         /* Mobile Adjustments */
-        @media (max-width: 1024px) { body { padding-left: 0; } .chart-row { grid-template-columns: 1fr; } }
-        @media print { body { padding: 0; } .header-bar, .tabs, .chart-card, .btn-excel, .btn-print { display: none !important; } .tab-content { display: block !important; } }
+        @media (max-width: 1024px) {
+            body {
+                padding-left: 0;
+            }
+
+            .chart-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media print {
+            body {
+                padding: 0;
+            }
+
+            .header-bar,
+            .tabs,
+            .chart-card,
+            .btn-excel,
+            .btn-print {
+                display: none !important;
+            }
+
+            .tab-content {
+                display: block !important;
+            }
+        }
     </style>
 </head>
 
@@ -215,24 +562,25 @@ $stock_list = $conn->query("
         </div>
 
         <div id="tab-sales" class="tab-content active">
+
             <div class="summary-grid">
                 <div class="summary-card">
-                    <div class="summary-title">Total Sales Revenue</div>
-                    <div class="summary-value green">₹ <?= number_format($sales_stats['total_revenue'], 2) ?></div>
+                    <div class="summary-title">Lifetime Sales Revenue</div>
+                    <div class="summary-value blue">₹ <?= number_format($sales_life['rev'], 2) ?></div>
                 </div>
                 <div class="summary-card">
-                    <div class="summary-title">Total Bills</div>
-                    <div class="summary-value"><?= number_format($sales_stats['total_bills']) ?></div>
+                    <div class="summary-title">This Financial Year</div>
+                    <div class="summary-value green">₹ <?= number_format($sales_fy['rev'], 2) ?></div>
                 </div>
                 <div class="summary-card">
-                    <div class="summary-title">Discount Given</div>
-                    <div class="summary-value red">₹ <?= number_format($sales_stats['total_discount'], 2) ?></div>
+                    <div class="summary-title">Filtered Period Revenue</div>
+                    <div class="summary-value">₹ <?= number_format($sales_stats['total_revenue'], 2) ?></div>
                 </div>
             </div>
 
             <div class="chart-row">
                 <div class="chart-card">
-                    <div class="chart-title"><i class="fas fa-chart-area"></i> Daily Sales Trend</div>
+                    <div class="chart-title"><i class="fas fa-chart-area"></i> Monthly Sales Trend (Last 12 Months)</div>
                     <div class="canvas-container">
                         <canvas id="salesLineChart"></canvas>
                     </div>
@@ -280,13 +628,13 @@ $stock_list = $conn->query("
                                 <?php endwhile;
                             else: ?>
                                 <tr>
-                                    <td colspan="5" style="text-align:center; padding:20px;">No sales found.</td>
+                                    <td colspan="5" style="text-align:center; padding:20px;">No sales found in this period.</td>
                                 </tr>
                             <?php endif; ?>
                         </tbody>
                         <tfoot>
                             <tr style="background: rgba(0,0,0,0.03); font-weight:bold;">
-                                <td colspan="4" style="text-align:right;">Grand Total:</td>
+                                <td colspan="4" style="text-align:right;">Grand Total (Filtered):</td>
                                 <td style="text-align:right; color:var(--success);">₹<?= number_format($sales_stats['total_revenue'], 2) ?></td>
                             </tr>
                         </tfoot>
@@ -296,24 +644,31 @@ $stock_list = $conn->query("
         </div>
 
         <div id="tab-jobs" class="tab-content">
+
             <div class="summary-grid">
                 <div class="summary-card">
-                    <div class="summary-title">Total Job Revenue</div>
-                    <div class="summary-value green">₹ <?= number_format($job_stats['total_revenue'], 2) ?></div>
+                    <div class="summary-title">Lifetime Job Work</div>
+                    <div class="summary-value blue">₹ <?= number_format($job_life['rev'], 2) ?></div>
                 </div>
                 <div class="summary-card">
-                    <div class="summary-title">Total Weight Processed</div>
-                    <div class="summary-value"><?= number_format($job_stats['total_weight'], 2) ?> Kg</div>
+                    <div class="summary-title">This Financial Year</div>
+                    <div class="summary-value green">₹ <?= number_format($job_fy['rev'], 2) ?></div>
                 </div>
                 <div class="summary-card">
-                    <div class="summary-title">Total Jobs Done</div>
-                    <div class="summary-value"><?= number_format($job_stats['total_jobs']) ?></div>
+                    <div class="summary-title">Filtered Period Revenue</div>
+                    <div class="summary-value">₹ <?= number_format($job_stats['total_revenue'], 2) ?></div>
                 </div>
             </div>
 
-            <div class="chart-row" style="grid-template-columns: 1fr;">
+            <div class="chart-row">
                 <div class="chart-card">
-                    <div class="chart-title"><i class="fas fa-seedling"></i> Seed Processing Volume (Kg)</div>
+                    <div class="chart-title"><i class="fas fa-chart-line"></i> Monthly Job Work Trend (Last 12 Months)</div>
+                    <div class="canvas-container">
+                        <canvas id="jwMonthlyChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title"><i class="fas fa-seedling"></i> Seed Distribution (Filtered)</div>
                     <div class="canvas-container">
                         <canvas id="jobsBarChart"></canvas>
                     </div>
@@ -332,8 +687,9 @@ $stock_list = $conn->query("
                                 <th>Date</th>
                                 <th>Job ID</th>
                                 <th>Customer</th>
-                                <th>Item</th>
+                                <th>Seed Type</th>
                                 <th>Weight (Kg)</th>
+                                <th>Payment Status</th>
                                 <th style="text-align:right;">Labour (₹)</th>
                             </tr>
                         </thead>
@@ -344,13 +700,14 @@ $stock_list = $conn->query("
                                         <td><strong>#<?= $row['id'] ?></strong></td>
                                         <td><?= htmlspecialchars($row['cust_name'] ?? 'Unknown') ?></td>
                                         <td><?= htmlspecialchars($row['seed_type']) ?></td>
-                                        <td><?= $row['weight_kg'] ?></td>
-                                        <td style="text-align:right; font-weight:600;">₹<?= number_format($row['total_amount'], 2) ?></td>
+                                        <td><?= $row['weight_kg'] ?> Kg</td>
+                                        <td><?= htmlspecialchars($row['payment_status']) ?></td>
+                                        <td style="text-align:right; font-weight:600; color:var(--success);">₹<?= number_format($row['total_amount'], 2) ?></td>
                                     </tr>
                                 <?php endwhile;
                             else: ?>
                                 <tr>
-                                    <td colspan="6" style="text-align:center; padding:20px;">No jobs found.</td>
+                                    <td colspan="7" style="text-align:center; padding:20px;">No jobs found in this period.</td>
                                 </tr>
                             <?php endif; ?>
                         </tbody>
@@ -361,7 +718,7 @@ $stock_list = $conn->query("
 
         <div id="tab-dues" class="tab-content">
             <div class="summary-grid">
-                <div class="summary-card" style="border-left: 5px solid var(--danger);">
+                <div class="summary-card">
                     <div class="summary-title">Total Market Outstanding (Udhaari)</div>
                     <div class="summary-value red">₹ <?= number_format($total_market_due, 2) ?></div>
                 </div>
@@ -405,7 +762,7 @@ $stock_list = $conn->query("
         <div id="tab-stock" class="tab-content">
             <div class="table-card">
                 <div class="table-header">
-                    <span>Current Godown Stock</span>
+                    <span>Current Finished Goods Stock</span>
                     <button class="btn btn-excel btn-sm" onclick="exportTableToCSV('stockTable', 'Inventory.csv')"><i class="fas fa-file-excel"></i> Export CSV</button>
                 </div>
                 <div class="table-responsive">
@@ -445,7 +802,7 @@ $stock_list = $conn->query("
     <div id="globalOrderModal" class="global-modal">
         <div class="g-modal-content">
             <div class="g-modal-header">
-                <h3 style="margin:0; font-size:1.1rem; color:#0f172a;"><i class="fas fa-receipt text-primary"></i> Order Details</h3>
+                <h3 style="margin:0; font-size:1.1rem; color:#0f172a;"><i class="fas fa-receipt text-primary" style="margin-right:8px;"></i> Order Details</h3>
                 <button class="g-close-btn" onclick="closeGlobalOrder()">&times;</button>
             </div>
             <div class="g-modal-body" id="globalOrderBody">
@@ -500,7 +857,7 @@ $stock_list = $conn->query("
             fetch(`ajax_order_details.php?id=${orderId}`)
                 .then(response => response.text())
                 .then(html => {
-                    body.innerHTML = html; 
+                    body.innerHTML = html;
                 })
                 .catch(err => {
                     body.innerHTML = '<div style="color:red; text-align:center; padding:20px;">Failed to load order details.</div>';
@@ -520,15 +877,15 @@ $stock_list = $conn->query("
 
         // --- CHART.JS INITIALIZATION ---
         window.onload = function() {
-            // 1. Line Chart (Daily Sales)
+            // 1. Line Chart (Monthly Sales)
             const ctxLine = document.getElementById('salesLineChart').getContext('2d');
             new Chart(ctxLine, {
                 type: 'line',
                 data: {
-                    labels: <?= json_encode($daily_dates) ?>,
+                    labels: <?= json_encode($sales_m_labels) ?>,
                     datasets: [{
-                        label: 'Daily Sales (₹)',
-                        data: <?= json_encode($daily_totals) ?>,
+                        label: 'Sales Revenue (₹)',
+                        data: <?= json_encode($sales_m_rev) ?>,
                         borderColor: '#4f46e5',
                         backgroundColor: 'rgba(79, 70, 229, 0.1)',
                         borderWidth: 2,
@@ -540,7 +897,11 @@ $stock_list = $conn->query("
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false } }
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
                 }
             });
 
@@ -563,7 +924,35 @@ $stock_list = $conn->query("
                 }
             });
 
-            // 3. Bar Chart (Jobs by Seed)
+            // 3. Line Chart (Monthly Job Work)
+            const ctxJwLine = document.getElementById('jwMonthlyChart').getContext('2d');
+            new Chart(ctxJwLine, {
+                type: 'line',
+                data: {
+                    labels: <?= json_encode($jw_m_labels) ?>,
+                    datasets: [{
+                        label: 'Job Work Revenue (₹)',
+                        data: <?= json_encode($jw_m_rev) ?>,
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3,
+                        pointBackgroundColor: '#f59e0b'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+
+            // 4. Bar Chart (Jobs by Seed)
             const ctxBar = document.getElementById('jobsBarChart').getContext('2d');
             new Chart(ctxBar, {
                 type: 'bar',
@@ -572,16 +961,22 @@ $stock_list = $conn->query("
                     datasets: [{
                         label: 'Weight Processed (Kg)',
                         data: <?= json_encode($seed_weights) ?>,
-                        backgroundColor: '#f59e0b',
+                        backgroundColor: '#10b981',
                         borderRadius: 4
                     }]
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
                 }
             });
         };
     </script>
 </body>
+
 </html>
