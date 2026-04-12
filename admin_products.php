@@ -111,11 +111,11 @@ $products_res = $conn->query($sql_products);
 $stats = ['total' => 0, 'value' => 0, 'low' => 0, 'active' => 0];
 $p_data = [];
 if ($products_res) {
- // --- 5. FETCH PRODUCTS LIST & STATS ---
-$search = $_GET['search'] ?? '';
-$where_sql = $search ? "WHERE p.name LIKE '%$search%' OR p.barcode LIKE '%$search%' OR p.description LIKE '%$search%'" : "";
+    // --- 5. FETCH PRODUCTS LIST & STATS ---
+    $search = $_GET['search'] ?? '';
+    $where_sql = $search ? "WHERE p.name LIKE '%$search%' OR p.barcode LIKE '%$search%' OR p.description LIKE '%$search%'" : "";
 
-$sql_products = "
+    $sql_products = "
     SELECT p.*, c.name as cat_name, s.name as seed_name
     FROM products p 
     LEFT JOIN categories c ON p.category_id = c.id
@@ -123,56 +123,56 @@ $sql_products = "
     $where_sql 
     ORDER BY FIELD(LOWER(p.product_type), 'oil', 'seed', 'cake', 'raw_oil'), p.name ASC";
 
-$products_res = $conn->query($sql_products);
+    $products_res = $conn->query($sql_products);
 
-// 🌟 NAYA: 'active' ki jagah 'seed_value' add kiya 🌟
-$stats = ['total' => 0, 'value' => 0, 'low' => 0, 'seed_value' => 0]; 
-$p_data = [];
+    // 🌟 NAYA: 'active' ki jagah 'seed_value' add kiya 🌟
+    $stats = ['total' => 0, 'value' => 0, 'low' => 0, 'seed_value' => 0];
+    $p_data = [];
 
-if ($products_res) {
-    while ($row = $products_res->fetch_assoc()) {
-        $stats['total']++;
-        $p_type = strtolower($row['product_type']);
-        $s_id = $row['seed_id'];
-        $current_stock = 0;
+    if ($products_res) {
+        while ($row = $products_res->fetch_assoc()) {
+            $stats['total']++;
+            $p_type = strtolower($row['product_type']);
+            $s_id = $row['seed_id'];
+            $current_stock = 0;
 
-        // SMART STOCK CALCULATION
-        if ($p_type == 'seed') {
-            $st_res = $conn->query("SELECT current_stock FROM seeds_master WHERE id = '$s_id'");
-            $current_stock = ($st_res && $st_res->num_rows > 0) ? $st_res->fetch_assoc()['current_stock'] : 0;
-        } elseif ($p_type == 'cake' || $p_type == 'raw_oil') {
-            $db_prod_type = ($p_type == 'raw_oil') ? 'OIL' : 'CAKE';
-            $st_res = $conn->query("SELECT SUM(CASE WHEN transaction_type IN ('RAW_IN','ADJUSTMENT_IN') THEN quantity WHEN transaction_type IN ('RAW_OUT','ADJUSTMENT_OUT') THEN -quantity ELSE 0 END) as qty FROM raw_material_inventory WHERE seed_id = '$s_id' AND UPPER(product_type) = '$db_prod_type'");
-            $current_stock = ($st_res && $st_res->num_rows > 0) ? $st_res->fetch_assoc()['qty'] : 0;
-        } else {
-            $st_sql = "SELECT SUM(CASE 
-                          WHEN transaction_type IN ('PRODUCTION', 'SALE_RETURN', 'ADJUSTMENT_IN') THEN qty 
+            // SMART STOCK CALCULATION
+            if ($p_type == 'seed') {
+                $st_res = $conn->query("SELECT current_stock FROM seeds_master WHERE id = '$s_id'");
+                $current_stock = ($st_res && $st_res->num_rows > 0) ? $st_res->fetch_assoc()['current_stock'] : 0;
+            } elseif ($p_type == 'cake' || $p_type == 'raw_oil') {
+                $db_prod_type = ($p_type == 'raw_oil') ? 'OIL' : 'CAKE';
+                $st_res = $conn->query("SELECT SUM(CASE WHEN transaction_type IN ('RAW_IN','ADJUSTMENT_IN') THEN quantity WHEN transaction_type IN ('RAW_OUT','ADJUSTMENT_OUT') THEN -quantity ELSE 0 END) as qty FROM raw_material_inventory WHERE seed_id = '$s_id' AND UPPER(product_type) = '$db_prod_type'");
+                $current_stock = ($st_res && $st_res->num_rows > 0) ? $st_res->fetch_assoc()['qty'] : 0;
+            } else {
+                $st_sql = "SELECT SUM(CASE 
+                       WHEN transaction_type IN ('PRODUCTION', 'SALE_RETURN', 'RETURN', 'ADJUSTMENT_IN') THEN qty
                           WHEN transaction_type IN ('SALE', 'DAMAGE', 'ADJUSTMENT_OUT') THEN -qty 
                           ELSE 0 
                        END) as final_qty 
                        FROM inventory_products WHERE product_id = '{$row['id']}'";
-            $st_res = $conn->query($st_sql);
-            $current_stock = ($st_res && $st_res->num_rows > 0) ? $st_res->fetch_assoc()['final_qty'] : 0;
+                $st_res = $conn->query($st_sql);
+                $current_stock = ($st_res && $st_res->num_rows > 0) ? $st_res->fetch_assoc()['final_qty'] : 0;
+            }
+
+            $current_stock = max(0, $current_stock ?? 0);
+            $row['real_stock'] = $current_stock;
+
+            // CALCULATE VALUES
+            $item_value = ($current_stock * $row['cost_price']);
+
+            // 🌟 NAYA: Seed ki value alag, aur baaki sabki (Tel, Khal, Packed) alag 🌟
+            if ($p_type == 'seed') {
+                $stats['seed_value'] += $item_value; // Sirf Seed card mein judega
+            } else {
+                $stats['value'] += $item_value; // Baaki sab Total Inventory mein judega
+            }
+
+            if ($current_stock < $row['min_stock']) $stats['low']++;
+
+            $p_data[] = $row;
         }
-
-        $current_stock = max(0, $current_stock ?? 0);
-        $row['real_stock'] = $current_stock; 
-
-        // CALCULATE VALUES
-        $item_value = ($current_stock * $row['cost_price']);
-
-        // 🌟 NAYA: Seed ki value alag, aur baaki sabki (Tel, Khal, Packed) alag 🌟
-        if ($p_type == 'seed') {
-            $stats['seed_value'] += $item_value; // Sirf Seed card mein judega
-        } else {
-            $stats['value'] += $item_value; // Baaki sab Total Inventory mein judega
-        }
-
-        if ($current_stock < $row['min_stock']) $stats['low']++;
-        
-        $p_data[] = $row;
     }
-}
 }
 ?>
 
@@ -620,7 +620,7 @@ if ($products_res) {
             <button class="btn btn-primary" onclick="openModal()"><i class="fas fa-plus"></i> Add Product</button>
         </div>
 
-       <div class="stats-grid">
+        <div class="stats-grid">
             <div class="stat-card blue">
                 <div class="stat-icon"><i class="fas fa-boxes"></i></div>
                 <div class="stat-value"><?= number_format($stats['total']) ?></div>
@@ -696,12 +696,12 @@ if ($products_res) {
                         <?php foreach ($p_data as $row):
                             $current_stock = $row['real_stock']; // Picked from top calculation
                             $p_type = strtolower($row['product_type']);
-                            
+
                             // Smart Display Unit
                             if ($p_type == 'seed' || $p_type == 'cake' || $p_type == 'raw_oil') {
                                 $stock_display = number_format($current_stock, 2) . " Kg";
                             } else {
-                                $stock_display = number_format($current_stock, 0) . " Pcs"; 
+                                $stock_display = number_format($current_stock, 0) . " Pcs";
                             }
                         ?>
                             <tr class="product-row"

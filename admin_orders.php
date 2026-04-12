@@ -1,5 +1,5 @@
 <?php
-// admin_orders.php - PRO VERSION (2-Stage Job Tracking, Cake Settlement, Edit Job)
+// admin_orders.php - PRO VERSION (Live Search, No Decimal Return, Edit Delivered)
 include 'config.php';
 session_start();
 
@@ -9,9 +9,11 @@ if (!$admin_id) {
     exit;
 }
 
+// ==========================================
 // --- ACTIONS ---
+// ==========================================
 
-// 1. ADD JOB
+// 1. ADD JOB WORK
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_service_order'])) {
     $cust_id = intval($_POST['customer_id']);
     $cust_name = trim($_POST['customer_name']);
@@ -52,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_service_order']))
     }
 }
 
-// 2. EDIT JOB WORK
+// 2. EDIT JOB WORK (Works for Active & Delivered)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_service_order'])) {
     $sid = intval($_POST['edit_job_id']);
     $weight = floatval($_POST['e_weight_kg']);
@@ -73,13 +75,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_service_status
     $status = $_POST['status'];
     $payment_status = $_POST['payment_status'] ?? 'Pending';
 
-    // Check if weights are provided (Stage 1 to Stage 2 transition)
     if (isset($_POST['oil_returned']) && isset($_POST['cake_returned'])) {
         $oil = floatval($_POST['oil_returned']);
         $cake = floatval($_POST['cake_returned']);
         $conn->query("UPDATE service_orders SET status='$status', oil_returned='$oil', cake_returned='$cake' WHERE id=$sid");
     } else {
-        // Stage 2 Delivery & Settlement
         $cake_settlement = $_POST['cake_settlement'] ?? 'customer';
 
         $conn->begin_transaction();
@@ -114,23 +114,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_service_status
             die("Error: " . $e->getMessage());
         }
     }
-
     header("Location: admin_orders.php?view=services&msg=Updated");
     exit;
 }
 
-// 4. UPDATE SALES
+// 4. UPDATE SALES ORDER STATUS (Active Orders)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_sales_order'])) {
     $oid = intval($_POST['order_id']);
     $status = $_POST['order_status'];
     $pay_status = $_POST['payment_status'];
-    $extra = ($pay_status == 'Paid') ? ", paid_amount = total, due_amount = 0" : "";
-    $conn->query("UPDATE orders SET status='$status', payment_status='$pay_status' $extra WHERE id=$oid");
-    header("Location: admin_orders.php?view=orders&msg=Updated");
+
+    $check_cancel = $conn->query("SELECT status FROM orders WHERE id=$oid")->fetch_assoc();
+    if ($check_cancel['status'] !== 'Cancelled') {
+        $extra = ($pay_status == 'Paid') ? ", paid_amount = total, due_amount = 0" : "";
+        $conn->query("UPDATE orders SET status='$status', payment_status='$pay_status' $extra WHERE id=$oid");
+        header("Location: admin_orders.php?view=orders&msg=Updated");
+    } else {
+        header("Location: admin_orders.php?view=orders&error=Cannot update a Cancelled Order");
+    }
     exit;
 }
 
-// 5. DELETE (WITH SMART STOCK RETURN LOGIC)
+// 5. BASIC EDIT FOR DELIVERED SALES ORDERS
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_sales_order_basic'])) {
+    $oid = intval($_POST['eso_id']);
+    $status = $_POST['eso_status'];
+    $pstatus = $_POST['eso_pstatus'];
+
+    $conn->query("UPDATE orders SET status='$status', payment_status='$pstatus' WHERE id=$oid");
+    header("Location: admin_orders.php?view=orders&msg=Order Updated");
+    exit;
+}
+
+// 6. DELETE JOB WORK (Service Order)
 if (isset($_GET['delete_service'])) {
     $id = intval($_GET['delete_service']);
     $conn->query("DELETE FROM service_orders WHERE id=$id");
@@ -139,62 +155,137 @@ if (isset($_GET['delete_service'])) {
     exit;
 }
 
-if (isset($_GET['delete_order'])) {
-    $id = intval($_GET['delete_order']);
+// ==========================================
+// 🌟 7. CANCEL SALES ORDER (SMART STOCK RETURN) 🌟
+// ==========================================
+if (isset($_GET['cancel_order'])) {
+    $id = intval($_GET['cancel_order']);
+    
     $conn->begin_transaction();
     try {
-        $items_res = $conn->query("SELECT product_id, qty FROM order_items WHERE order_id=$id");
+        $order_check = $conn->query("SELECT status FROM orders WHERE id=$id")->fetch_assoc();
+        if ($order_check['status'] === 'Cancelled') throw new Exception("Order is already cancelled.");
+
+        $items_res = $conn->query("
+            SELECT oi.product_id, oi.qty, p.product_type, p.seed_id, p.weight 
+            FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id=$id
+        ");
+
         if ($items_res) {
             while ($item = $items_res->fetch_assoc()) {
                 $p_id = intval($item['product_id']);
-                $qty = floatval($item['qty']);
+                $qty = floatval($item['qty']); 
+                $p_type = strtolower($item['product_type']);
+                $s_id = intval($item['seed_id']);
+                $weight = floatval($item['weight'] ?? 1); 
+                if ($weight <= 0) $weight = 1;
 
-                $prod_res = $conn->query("SELECT product_type, seed_id FROM products WHERE id=$p_id");
-                if ($prod_res && $prod = $prod_res->fetch_assoc()) {
-                    $p_type = strtolower($prod['product_type']);
-                    $s_id = intval($prod['seed_id']);
-
-                    if ($p_type == 'cake' || $p_type == 'raw_oil') {
-                        $db_type = ($p_type == 'cake') ? 'CAKE' : 'OIL';
-                        $note = "Stock Returned - Order Deleted #$id";
-                        $stmtInv = $conn->prepare("INSERT INTO raw_material_inventory (seed_id, product_type, transaction_type, quantity, unit, source_type, notes, transaction_date) VALUES (?, ?, 'RAW_IN', ?, 'KG', 'ADJUSTMENT', ?, NOW())");
-                        $stmtInv->bind_param("isds", $s_id, $db_type, $qty, $note);
+                if ($p_type == 'seed') {
+                    $return_weight = $qty * $weight;
+                    $conn->query("UPDATE seeds_master SET current_stock = current_stock + $return_weight WHERE id = $s_id");
+                } elseif ($p_type == 'raw_oil') {
+                    $return_weight = $qty * $weight;
+                    $note = "Stock Returned - Order Cancelled #$id";
+                    if ($s_id > 0) {
+                        $stmtInv = $conn->prepare("INSERT INTO raw_material_inventory (seed_id, product_type, transaction_type, quantity, unit, source_type, notes, created_at) VALUES (?, 'OIL', 'RAW_IN', ?, 'KG', 'ADJUSTMENT', ?, NOW())");
+                        $stmtInv->bind_param("ids", $s_id, $return_weight, $note);
                         $stmtInv->execute();
-                    } elseif ($p_type == 'seed') {
-                        $conn->query("UPDATE seeds_master SET current_stock = current_stock + $qty WHERE id = $s_id");
-                    } else {
-                        $stmtPack = $conn->prepare("INSERT INTO inventory_products (product_id, qty, unit, transaction_type, created_at) VALUES (?, ?, 'Pcs', 'RETURN', NOW())");
-                        $stmtPack->bind_param("id", $p_id, $qty);
-                        $stmtPack->execute();
                     }
+                } else {
+                    // 🌟 FIXED: Added mfg_date (CURDATE) and strict Error Checking 🌟
+                    $stmtPack = $conn->prepare("INSERT INTO inventory_products (product_id, batch_no, qty, unit, transaction_type, mfg_date, created_at) VALUES (?, 'RETURN', ?, 'Pcs', 'RETURN', CURDATE(), NOW())");
+                    if(!$stmtPack) throw new Exception("DB Error: " . $conn->error);
+                    $stmtPack->bind_param("id", $p_id, $qty);
+                    if(!$stmtPack->execute()) throw new Exception("Stock Update Failed: " . $stmtPack->error);
                 }
             }
         }
-        $conn->query("DELETE FROM order_items WHERE order_id=$id");
-        $conn->query("DELETE FROM orders WHERE id=$id");
+        $conn->query("UPDATE orders SET status='Cancelled', payment_status='Refunded/Cancelled' WHERE id=$id");
         $conn->commit();
-        header("Location: admin_orders.php?view=orders&msg=Order Deleted & Stock Returned");
+        header("Location: admin_orders.php?view=orders&msg=Order Cancelled & Stock Returned");
         exit;
     } catch (Exception $e) {
         $conn->rollback();
-        die("Error returning stock: " . $e->getMessage());
+        header("Location: admin_orders.php?view=orders&error=" . urlencode($e->getMessage()));
+        exit;
     }
 }
 
-// --- DATA FETCHING ---
+// ==========================================
+// 🌟 8. PROCESS SINGLE ITEM RETURN 🌟
+// ==========================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_return'])) {
+    $order_id = intval($_POST['return_order_id']);
+    $item_id = intval($_POST['return_item_id']); 
+    $return_qty = intval($_POST['return_qty']); 
+    $return_reason = $conn->real_escape_string($_POST['return_reason'] ?? 'Customer Return');
+
+    if ($return_qty > 0) {
+        $conn->begin_transaction();
+        try {
+            $check_item = $conn->query("SELECT qty FROM order_items WHERE order_id = $order_id AND product_id = $item_id")->fetch_assoc();
+            if (!$check_item) throw new Exception("This item does not belong to this order!");
+            
+            $actual_bought_qty = intval($check_item['qty']);
+            if ($return_qty > $actual_bought_qty) throw new Exception("Invalid Return! Customer only bought $actual_bought_qty items.");
+
+            $p_info = $conn->query("SELECT product_type, seed_id, weight, base_price FROM products WHERE id = $item_id")->fetch_assoc();
+            
+            if ($p_info) {
+                $p_type = strtolower($p_info['product_type']);
+                $s_id = intval($p_info['seed_id']);
+                $weight = floatval($p_info['weight'] ?? 1); 
+                if ($weight <= 0) $weight = 1;
+                $refund_amount = $return_qty * floatval($p_info['base_price']);
+
+                if ($p_type == 'seed') {
+                    $return_weight = $return_qty * $weight;
+                    $conn->query("UPDATE seeds_master SET current_stock = current_stock + $return_weight WHERE id = $s_id");
+                } elseif ($p_type == 'raw_oil') {
+                    $return_weight = $return_qty * $weight;
+                    $note = "Partial Return - Order #$order_id";
+                    if ($s_id > 0) {
+                        $stmtInv = $conn->prepare("INSERT INTO raw_material_inventory (seed_id, product_type, transaction_type, quantity, unit, source_type, notes, created_at) VALUES (?, 'OIL', 'RAW_IN', ?, 'KG', 'ADJUSTMENT', ?, NOW())");
+                        $stmtInv->bind_param("ids", $s_id, $return_weight, $note);
+                        $stmtInv->execute();
+                    }
+                } else {
+                    // 🌟 FIXED: Added mfg_date (CURDATE) and strict Error Checking 🌟
+                    $stmtPack = $conn->prepare("INSERT INTO inventory_products (product_id, batch_no, qty, unit, transaction_type, mfg_date, created_at) VALUES (?, 'RETURN', ?, 'Pcs', 'RETURN', CURDATE(), NOW())");
+                    if(!$stmtPack) throw new Exception("DB Error: " . $conn->error);
+                    $stmtPack->bind_param("id", $item_id, $return_qty);
+                    if(!$stmtPack->execute()) throw new Exception("Stock Update Failed: " . $stmtPack->error);
+                }
+
+                $conn->query("UPDATE orders SET total = GREATEST(0, total - $refund_amount) WHERE id = $order_id");
+                $conn->query("UPDATE order_items SET qty = GREATEST(0, qty - $return_qty), line_total = GREATEST(0, line_total - $refund_amount) WHERE order_id = $order_id AND product_id = $item_id");
+
+                $conn->commit();
+                header("Location: admin_orders.php?view=orders&msg=Item Returned & Stock Updated");
+                exit;
+            }
+        } catch (Exception $e) {
+            $conn->rollback();
+            header("Location: admin_orders.php?view=orders&error=" . urlencode($e->getMessage()));
+            exit;
+        }
+    }
+}
+
+// --- DATA FETCHING FOR UI ---
 $view = $_GET['view'] ?? 'orders';
 $today_date = date('Y-m-d');
 
-$q1 = $conn->query("SELECT COUNT(id) as cnt FROM orders WHERE DATE(created_at) = '$today_date'");
+$q1 = $conn->query("SELECT COUNT(id) as cnt FROM orders WHERE DATE(created_at) = '$today_date' AND status != 'Cancelled'");
 $today_orders = $q1->fetch_assoc()['cnt'] ?? 0;
 
-$q2 = $conn->query("SELECT SUM(total) as amt FROM orders WHERE DATE(created_at) = '$today_date'");
+$q2 = $conn->query("SELECT SUM(total) as amt FROM orders WHERE DATE(created_at) = '$today_date' AND status != 'Cancelled'");
 $today_sale = $q2->fetch_assoc()['amt'] ?? 0;
 
 $q3 = $conn->query("SELECT COUNT(id) as cnt FROM orders WHERE status = 'Pending'");
 $pending_packing = $q3->fetch_assoc()['cnt'] ?? 0;
 
-$q4 = $conn->query("SELECT SUM(total - paid_amount) as amt FROM orders WHERE payment_status != 'Paid'");
+$q4 = $conn->query("SELECT SUM(total - paid_amount) as amt FROM orders WHERE payment_status != 'Paid' AND status != 'Cancelled'");
 $unpaid_amount = $q4->fetch_assoc()['amt'] ?? 0;
 
 $seeds_list = [];
@@ -204,48 +295,35 @@ while ($row = $s_query->fetch_assoc()) $seeds_list[] = $row['name'];
 $r_query = $conn->query("SELECT seed_type, rate_per_kg FROM service_orders");
 while ($row = $r_query->fetch_assoc()) $last_rates[$row['seed_type']] = $row['rate_per_kg'];
 
-$search = $_GET['search'] ?? '';
 $date_filter = $_GET['date'] ?? '';
 $status_filter = $_GET['status_filter'] ?? '';
 
-// We now need 3 lists for Services: Processing, Completed (Ready), and History
 $processing_list = [];
 $completed_list = [];
 $history_list = [];
 
 if ($view === 'services') {
-    // Stage 1: Machine Processing (Pending / Processing)
-    $sql_proc = "SELECT s.*, c.name as customer_name, c.phone FROM service_orders s LEFT JOIN customers c ON s.user_id = c.id WHERE s.status IN ('Pending', 'Processing') ORDER BY s.service_date DESC";
-    $res_proc = $conn->query($sql_proc);
+    $res_proc = $conn->query("SELECT s.*, c.name as customer_name, c.phone FROM service_orders s LEFT JOIN customers c ON s.user_id = c.id WHERE s.status IN ('Pending', 'Processing') ORDER BY s.service_date DESC");
     if ($res_proc) while ($r = $res_proc->fetch_assoc()) $processing_list[] = $r;
 
-    // Stage 2: Ready for Delivery (Completed)
-    $sql_comp = "SELECT s.*, c.name as customer_name, c.phone FROM service_orders s LEFT JOIN customers c ON s.user_id = c.id WHERE s.status = 'Completed' ORDER BY s.service_date DESC";
-    $res_comp = $conn->query($sql_comp);
+    $res_comp = $conn->query("SELECT s.*, c.name as customer_name, c.phone FROM service_orders s LEFT JOIN customers c ON s.user_id = c.id WHERE s.status = 'Completed' ORDER BY s.service_date DESC");
     if ($res_comp) while ($r = $res_comp->fetch_assoc()) $completed_list[] = $r;
 
-    // History (Delivered or filtered)
     $where = "1=1";
-    if ($search) $where .= " AND (c.name LIKE '%$search%' OR c.phone LIKE '%$search%')";
     if ($date_filter) $where .= " AND DATE(s.service_date) = '$date_filter'";
     if ($status_filter) $where .= " AND s.status = '$status_filter'";
 
-    $sql_hist = "SELECT s.*, c.name as customer_name, c.phone FROM service_orders s LEFT JOIN customers c ON s.user_id = c.id WHERE $where ORDER BY s.service_date DESC LIMIT 100";
-    $res_hist = $conn->query($sql_hist);
+    $res_hist = $conn->query("SELECT s.*, c.name as customer_name, c.phone FROM service_orders s LEFT JOIN customers c ON s.user_id = c.id WHERE $where ORDER BY s.service_date DESC LIMIT 100");
     if ($res_hist) while ($r = $res_hist->fetch_assoc()) $history_list[] = $r;
 } else {
-    $active_list = [];
-    $sql_act = "SELECT o.*, c.name as customer_name FROM orders o LEFT JOIN customers c ON o.customer_id = c.id WHERE o.status IN ('pending', 'ReadyToShip', 'Shipped') ORDER BY o.created_at DESC";
-    $res_act = $conn->query($sql_act);
+    $res_act = $conn->query("SELECT o.*, c.name as customer_name FROM orders o LEFT JOIN customers c ON o.customer_id = c.id WHERE o.status IN ('pending', 'ReadyToShip', 'Shipped') ORDER BY o.created_at DESC");
     if ($res_act) while ($r = $res_act->fetch_assoc()) $active_list[] = $r;
 
     $where = "1=1";
-    if ($search) $where .= " AND (c.name LIKE '%$search%' OR c.phone LIKE '%$search%')";
     if ($date_filter) $where .= " AND DATE(o.created_at) = '$date_filter'";
     if ($status_filter) $where .= " AND o.status = '$status_filter'";
 
-    $sql_hist = "SELECT o.*, c.name as customer_name FROM orders o LEFT JOIN customers c ON o.customer_id = c.id WHERE $where ORDER BY o.created_at DESC LIMIT 100";
-    $res_hist = $conn->query($sql_hist);
+    $res_hist = $conn->query("SELECT o.*, c.name as customer_name FROM orders o LEFT JOIN customers c ON o.customer_id = c.id WHERE $where ORDER BY o.created_at DESC LIMIT 100");
     if ($res_hist) while ($r = $res_hist->fetch_assoc()) $history_list[] = $r;
 }
 ?>
@@ -260,7 +338,6 @@ if ($view === 'services') {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/admin_style.css">
-    <link rel="icon" type="image/png" href="images/favicon-32x32.png">
 
     <style>
         .container {
@@ -380,6 +457,15 @@ if ($view === 'services') {
 
         .job-card.ready {
             border-top: 4px solid var(--success);
+        }
+
+        .job-card.cancelled {
+            border-top: 4px solid var(--danger);
+            opacity: 0.8;
+        }
+
+        .job-card.cancelled .job-header {
+            background: #fef2f2;
         }
 
         .job-header {
@@ -530,7 +616,12 @@ if ($view === 'services') {
     <div class="container">
         <?php if (isset($_GET['msg'])): ?>
             <div class="alert" style="padding:10px 15px; background:#dcfce7; color:#166534; border-radius:6px; margin-bottom:15px; border:1px solid #bbf7d0; font-weight:600;">
-                <i class="fas fa-check-circle"></i> Action Completed Successfully!
+                <i class="fas fa-check-circle"></i> <?= htmlspecialchars($_GET['msg']) ?>
+            </div>
+        <?php endif; ?>
+        <?php if (isset($_GET['error'])): ?>
+            <div class="alert" style="padding:10px 15px; background:#fef2f2; color:#991b1b; border-radius:6px; margin-bottom:15px; border:1px solid #fca5a5; font-weight:600;">
+                <i class="fas fa-exclamation-triangle"></i> <?= htmlspecialchars($_GET['error']) ?>
             </div>
         <?php endif; ?>
 
@@ -618,11 +709,6 @@ if ($view === 'services') {
                                     <div style="font-size: 1.3rem; font-weight: 800; color: #dc2626;">₹<?= number_format($unpaid_amount) ?></div>
                                 </div>
                             </div>
-                            <div style="margin-top: 20px;">
-                                <a href="?view=orders&status_filter=Pending" class="btn btn-primary" style="display: flex; justify-content: center; align-items: center; gap: 8px; width:100%;">
-                                    <i class="fas fa-box-open"></i> View Pending Orders
-                                </a>
-                            </div>
                         </div>
                     </div>
                 <?php endif; ?>
@@ -630,7 +716,6 @@ if ($view === 'services') {
 
             <main>
                 <?php if ($view === 'services'): ?>
-
                     <div class="section-title"><i class="fas fa-cogs text-warning"></i> Stage 1: Machine Processing</div>
                     <div class="jobs-grid">
                         <?php if (!empty($processing_list)): foreach ($processing_list as $row): ?>
@@ -652,17 +737,11 @@ if ($view === 'services') {
                                         <div style="background:#fffbeb; padding:10px; border-radius:6px; border:1px solid #fde68a;">
                                             <div style="font-size:0.75rem; font-weight:700; color:#b45309; margin-bottom:5px;">ENTER OUTPUT TO COMPLETE</div>
                                             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-                                                <div>
-                                                    <input type="number" name="oil_returned" step="0.01" class="form-input" style="padding:6px; font-size:0.85rem;" placeholder="Oil (Kg)" required>
-                                                </div>
-                                                <div>
-                                                    <input type="number" name="cake_returned" step="0.01" class="form-input" style="padding:6px; font-size:0.85rem;" placeholder="Cake (Kg)" required>
-                                                </div>
+                                                <div><input type="number" name="oil_returned" step="0.01" class="form-input" style="padding:6px; font-size:0.85rem;" placeholder="Oil (Kg)" required></div>
+                                                <div><input type="number" name="cake_returned" step="0.01" class="form-input" style="padding:6px; font-size:0.85rem;" placeholder="Cake (Kg)" required></div>
                                             </div>
                                         </div>
-
                                         <input type="hidden" name="status" value="Completed">
-
                                         <div style="display:flex; gap:8px; width:100%;">
                                             <button type="submit" name="update_service_status" class="btn btn-warning" style="flex:1; padding:8px;"><i class="fas fa-check-circle"></i> Mark Completed</button>
                                             <button type="button" onclick='editJobWork(<?= json_encode($row) ?>)' class="btn btn-outline" style="padding:8px 12px; color:var(--text-main);" title="Edit Job"><i class="fas fa-edit"></i></button>
@@ -701,8 +780,8 @@ if ($view === 'services') {
                                             <div style="margin-bottom:10px;">
                                                 <label style="font-size:0.7rem; font-weight:700; color:var(--text-muted);">CAKE SETTLEMENT</label>
                                                 <select name="cake_settlement" class="form-input" style="padding:6px; font-size:0.85rem; border-color:#f59e0b; background:#fffbeb;" onchange="autoWaivePayment(this)">
-                                                    <option value="customer">कस्टमर खल ले गया (Customer Took Cake)</option>
-                                                    <option value="factory">फैक्ट्री ने खल रख ली (Factory Kept Cake)</option>
+                                                    <option value="customer">Customer Took Cake</option>
+                                                    <option value="factory">Factory Kept Cake</option>
                                                 </select>
                                             </div>
                                             <div>
@@ -714,10 +793,10 @@ if ($view === 'services') {
                                                 </select>
                                             </div>
                                         </div>
-
                                         <div style="display:flex; gap:8px; width:100%;">
                                             <button type="submit" name="update_service_status" class="btn btn-success" style="flex:1; padding:8px; background:var(--success); border-color:var(--success); color:white;"><i class="fas fa-truck"></i> Deliver Order</button>
                                             <a href="#" onclick="openPrintEngine('job_sticker', <?= $row['id'] ?>)" class="btn btn-outline" style="padding:8px 12px;" title="Print Slip"><i class="fas fa-print text-primary"></i></a>
+                                            <button type="button" onclick='editJobWork(<?= json_encode($row) ?>)' class="btn btn-outline" style="padding:8px 12px; color:var(--text-main);" title="Edit Job"><i class="fas fa-edit"></i></button>
                                         </div>
                                     </form>
                                 </div>
@@ -728,6 +807,7 @@ if ($view === 'services') {
                     </div>
 
                 <?php else: ?>
+
                     <div class="section-title"><i class="fas fa-box"></i> Active Sales Orders</div>
                     <div class="jobs-grid">
                         <?php if (!empty($active_list)): foreach ($active_list as $row): ?>
@@ -743,7 +823,7 @@ if ($view === 'services') {
                                             <span>Total Value:</span> ₹<?= number_format($row['total'], 2) ?>
                                         </div>
                                     </div>
-                                    <form method="POST" class="job-footer" style="flex-direction:row;">
+                                    <form method="POST" class="job-footer">
                                         <input type="hidden" name="order_id" value="<?= $row['id'] ?>">
                                         <div style="display:flex; width:100%; gap:8px;">
                                             <select name="order_status" class="form-input" style="flex:2; padding: 8px;">
@@ -758,6 +838,11 @@ if ($view === 'services') {
                                             </select>
                                             <button type="submit" name="update_sales_order" class="btn btn-primary" style="background:#3b82f6; padding:8px 12px; flex-shrink:0;"><i class="fas fa-check"></i></button>
                                         </div>
+                                        <div style="display:flex; justify-content:space-between; margin-top:8px;">
+                                            <a href="#" onclick="viewOrderDetails(<?= $row['id'] ?>); return false;" class="btn btn-outline" style="padding:6px 10px; font-size:0.8rem;"><i class="fas fa-eye"></i> View</a>
+                                            <a href="#" onclick='editSalesOrder(<?= json_encode($row) ?>); return false;' class="btn btn-outline" style="padding:6px 10px; font-size:0.8rem; color:var(--warning); border-color:var(--warning);"><i class="fas fa-edit"></i> Edit</a>
+                                            <a href="?view=orders&cancel_order=<?= $row['id'] ?>" onclick="return confirm('Cancel this Order and return all stock?')" class="btn btn-outline" style="padding:6px 10px; font-size:0.8rem; color:var(--danger); border-color:var(--danger);"><i class="fas fa-ban"></i> Cancel</a>
+                                        </div>
                                     </form>
                                 </div>
                             <?php endforeach;
@@ -769,28 +854,27 @@ if ($view === 'services') {
 
                 <div class="section-title" style="margin-top:20px;"><i class="fas fa-history text-muted"></i> History & Filters</div>
 
-                <form method="GET" class="filter-bar">
+                <form method="GET" class="filter-bar" onsubmit="return false;">
                     <input type="hidden" name="view" value="<?= $view ?>">
                     <div class="filter-item">
-                        <label class="form-label">Search Name / Phone</label>
-                        <input type="text" name="search" class="form-input" value="<?= htmlspecialchars($search) ?>" placeholder="Type to search...">
+                        <label class="form-label">Live Search (Name, Order, Phone)</label>
+                        <input type="text" id="liveSearchInput" class="form-input" placeholder="Type to search live..." autocomplete="off">
                     </div>
                     <div class="filter-item">
                         <label class="form-label">Filter by Date</label>
-                        <input type="date" name="date" class="form-input" value="<?= htmlspecialchars($date_filter) ?>">
+                        <input type="date" name="date" class="form-input" value="<?= htmlspecialchars($date_filter) ?>" onchange="this.form.submit()">
                     </div>
                     <div class="filter-item">
                         <label class="form-label">Order Status</label>
-                        <select name="status_filter" class="form-input">
+                        <select name="status_filter" class="form-input" onchange="this.form.submit()">
                             <option value="">All Status</option>
                             <option value="Pending" <?= $status_filter == 'Pending' ? 'selected' : '' ?>>Pending</option>
-                            <option value="Processing" <?= $status_filter == 'Processing' ? 'selected' : '' ?>>Processing</option>
-                            <option value="Completed" <?= $status_filter == 'Completed' ? 'selected' : '' ?>>Completed</option>
+                            <option value="Completed" <?= $status_filter == 'Completed' ? 'selected' : '' ?>>Completed/Shipped</option>
                             <option value="Delivered" <?= $status_filter == 'Delivered' ? 'selected' : '' ?>>Delivered</option>
+                            <?php if ($view == 'orders'): ?>
+                                <option value="Cancelled" <?= $status_filter == 'Cancelled' ? 'selected' : '' ?>>Cancelled</option>
+                            <?php endif; ?>
                         </select>
-                    </div>
-                    <div class="filter-item" style="flex:0; min-width:auto;">
-                        <button type="submit" class="btn btn-primary" style="padding:10px 25px;"><i class="fas fa-filter" style="margin-right:5px;"></i> Filter</button>
                     </div>
                     <div class="filter-item" style="flex:0; min-width:auto;">
                         <a href="admin_orders.php?view=<?= $view ?>" class="btn btn-outline" style="padding:10px 20px; text-decoration:none;">Reset</a>
@@ -826,7 +910,6 @@ if ($view === 'services') {
                         </thead>
                         <tbody>
                             <?php if (!empty($history_list)): foreach ($history_list as $row): ?>
-
                                     <?php if ($view === 'services'): ?>
                                         <tr>
                                             <td style="font-weight:700; color:#0f172a;">#<?= $row['id'] ?></td>
@@ -839,11 +922,12 @@ if ($view === 'services') {
                                             <td><span class="badge st-<?= strtolower($row['status']) ?>"><?= $row['status'] ?></span></td>
                                             <td style="text-align:right; white-space:nowrap;">
                                                 <a href="#" onclick="openPrintEngine('job_sticker', <?= $row['id'] ?>)" class="btn-icon print" title="Print Slip"><i class="fas fa-print"></i></a>
-                                                <a href="?view=services&delete_service=<?= $row['id'] ?>" onclick="return confirm('Are you sure you want to delete this Job? (If factory kept the cake, stock will be reversed)')" class="btn-icon delete" title="Delete"><i class="fas fa-trash"></i></a>
+                                                <a href="#" onclick='editJobWork(<?= json_encode($row) ?>); return false;' class="btn-icon" style="color:var(--warning); margin-right:5px;" title="Edit Job"><i class="fas fa-edit"></i></a>
+                                                <a href="?view=services&delete_service=<?= $row['id'] ?>" onclick="return confirm('Are you sure you want to delete this Job?')" class="btn-icon delete" title="Delete"><i class="fas fa-trash"></i></a>
                                             </td>
                                         </tr>
                                     <?php else: ?>
-                                        <tr>
+                                        <tr <?= $row['status'] == 'Cancelled' ? 'style="background:#fef2f2; opacity:0.8;"' : '' ?>>
                                             <td>
                                                 <a href="#" onclick="viewOrderDetails(<?= $row['id'] ?>); return false;" style="color:#3b82f6; font-weight:700; text-decoration:none;">
                                                     #<?= $row['order_no'] ?>
@@ -851,19 +935,25 @@ if ($view === 'services') {
                                             </td>
                                             <td><?= date('d M, Y', strtotime($row['created_at'])) ?></td>
                                             <td><strong style="color:#334155;"><?= $row['customer_name'] ?></strong></td>
-                                            <td style="font-weight:700; color:#0f172a;">₹<?= number_format($row['total'], 2) ?></td>
-                                            <td><span class="badge st-<?= strtolower($row['payment_status']) ?>"><?= $row['payment_status'] ?></span></td>
+                                            <td style="font-weight:700; color:#0f172a;">
+                                                ₹<?= number_format($row['total'], 2) ?>
+                                                <?php if ($row['status'] == 'Cancelled') echo '<br><small style="color:var(--danger)">Refunded</small>'; ?>
+                                            </td>
+                                            <td><span class="badge st-<?= strtolower(str_replace(' ', '', $row['payment_status'])) ?>"><?= $row['payment_status'] ?></span></td>
                                             <td><span class="badge st-<?= strtolower($row['status']) ?>"><?= $row['status'] ?></span></td>
-                                            <td style="text-align:right;">
-                                                <a href="?view=orders&delete_order=<?= $row['id'] ?>" onclick="return confirm('Are you sure you want to delete this Order? (Stock will be returned automatically)')" class="btn-icon delete"><i class="fas fa-trash"></i></a>
+                                            <td style="text-align:right; white-space:nowrap;">
+                                                <?php if ($row['status'] !== 'Cancelled'): ?>
+                                                    <a href="#" onclick='editSalesOrder(<?= json_encode($row) ?>); return false;' class="btn-icon" style="color:var(--warning); margin-right:8px;" title="Edit Details"><i class="fas fa-edit"></i></a>
+                                                    <a href="#" onclick="openReturnModal(<?= $row['id'] ?>); return false;" class="btn-icon" style="color:var(--primary); margin-right:8px;" title="Return Item"><i class="fas fa-undo"></i></a>
+                                                    <a href="?view=orders&cancel_order=<?= $row['id'] ?>" onclick="return confirm('Cancel this full Order and return stock?')" class="btn-icon delete" title="Cancel Order"><i class="fas fa-ban"></i></a>
+                                                <?php endif; ?>
                                             </td>
                                         </tr>
                                     <?php endif; ?>
-
                                 <?php endforeach;
                             else: ?>
                                 <tr>
-                                    <td colspan="9" style="text-align:center; padding:40px; color:#94a3b8; font-size:0.95rem;">No history records found for the selected filter.</td>
+                                    <td colspan="9" style="text-align:center; padding:40px; color:#94a3b8; font-size:0.95rem;">No history records found.</td>
                                 </tr>
                             <?php endif; ?>
                         </tbody>
@@ -912,11 +1002,76 @@ if ($view === 'services') {
         </div>
     </div>
 
+    <div id="editSalesOrderModal" class="global-modal">
+        <div class="g-modal-content" style="max-width:400px;">
+            <div class="g-modal-header">
+                <h3 style="margin:0; font-size:1.1rem;"><i class="fas fa-edit text-warning" style="margin-right:8px;"></i> Edit Sales Order</h3>
+                <button type="button" class="g-close-btn" onclick="closeEditSalesOrder()">&times;</button>
+            </div>
+            <div class="g-modal-body">
+                <form method="POST">
+                    <input type="hidden" name="eso_id" id="eso_id">
+                    <input type="hidden" name="edit_sales_order_basic" value="1">
+
+                    <div class="form-group" style="margin-bottom:15px;">
+                        <label class="form-label">Order Status</label>
+                        <select name="eso_status" id="eso_status" class="form-input">
+                            <option value="pending">Pending</option>
+                            <option value="ReadyToShip">ReadyToShip</option>
+                            <option value="Shipped">Shipped</option>
+                            <option value="Delivered">Delivered</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:20px;">
+                        <label class="form-label">Payment Status</label>
+                        <select name="eso_pstatus" id="eso_pstatus" class="form-input">
+                            <option value="Pending">Unpaid (Pending)</option>
+                            <option value="Paid">Paid</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width:100%; padding:10px;"><i class="fas fa-save"></i> Update Order</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="returnItemModal" class="global-modal">
+        <div class="g-modal-content" style="max-width:400px;">
+            <div class="g-modal-header">
+                <h3 style="margin:0; font-size:1.1rem;"><i class="fas fa-undo text-warning" style="margin-right:8px;"></i> Return Specific Item</h3>
+                <button type="button" class="g-close-btn" onclick="closeReturnModal()">&times;</button>
+            </div>
+            <div class="g-modal-body">
+                <form method="POST">
+                    <input type="hidden" name="process_return" value="1">
+                    <input type="hidden" name="return_order_id" id="ret_order_id">
+
+                    <div class="form-group" style="margin-bottom:15px;">
+                        <label class="form-label">Select Item to Return</label>
+                        <select name="return_item_id" id="ret_item_select" class="form-input" required>
+                            <option value="">Loading items...</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:15px;">
+                        <label class="form-label">Quantity Returning (Pcs/Bags)</label>
+                        <input type="number" name="return_qty" id="ret_qty" step="1" min="1" class="form-input" placeholder="How many?" required onkeypress="return event.charCode >= 48 && event.charCode <= 57">
+                        <small style="color:var(--text-muted); display:block; margin-top:5px;">This quantity will be added back to your stock.</small>
+                    </div>
+                    <div class="form-group" style="margin-bottom:20px;">
+                        <label class="form-label">Reason (Optional)</label>
+                        <input type="text" name="return_reason" class="form-input" placeholder="e.g. Damaged packing">
+                    </div>
+                    <button type="submit" class="btn btn-warning" style="width:100%; padding:10px;"><i class="fas fa-check"></i> Process Return</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <div id="globalOrderModal" class="global-modal">
         <div class="g-modal-content">
             <div class="g-modal-header">
                 <h3 style="margin:0; font-size:1.1rem; color:#0f172a;"><i class="fas fa-receipt text-primary" style="margin-right:8px;"></i> Order Details</h3>
-                <button class="g-close-btn" onclick="closeGlobalOrder()">&times;</button>
+                <button type="button" class="g-close-btn" onclick="closeGlobalOrder()">&times;</button>
             </div>
             <div class="g-modal-body" id="globalOrderBody">
                 <div style="text-align:center; padding:30px; color:#94a3b8;">
@@ -924,12 +1079,33 @@ if ($view === 'services') {
                 </div>
             </div>
             <div style="padding:15px 20px; background:#f8fafc; border-top:1px solid #e2e8f0; text-align:right;">
-                <button class="btn btn-outline" style="width:auto; padding:8px 20px;" onclick="closeGlobalOrder()">Close Window</button>
+                <button type="button" class="btn btn-outline" style="width:auto; padding:8px 20px;" onclick="closeGlobalOrder()">Close Window</button>
             </div>
         </div>
     </div>
 
     <script>
+        // --- 🌟 LIVE SEARCH JS 🌟 ---
+        document.getElementById('liveSearchInput').addEventListener('input', function(e) {
+            let term = e.target.value.toLowerCase();
+
+            // Filter Job Cards
+            document.querySelectorAll('.job-card').forEach(card => {
+                let text = card.innerText.toLowerCase();
+                card.style.display = text.includes(term) ? '' : 'none';
+            });
+
+            // Filter History Table Rows
+            document.querySelectorAll('.table-wrap tbody tr').forEach(row => {
+                let text = row.innerText.toLowerCase();
+                if (row.innerText.includes("No history records") || text.includes(term)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+
         // --- SMART CAKE SETTLEMENT LOGIC ---
         function autoWaivePayment(selectElement) {
             const form = selectElement.closest('form');
@@ -946,12 +1122,11 @@ if ($view === 'services') {
             }
         }
 
-        // --- 1. Dynamic Print Engine Opener ---
+        // --- Print Engine Opener ---
         function openPrintEngine(docType, refId) {
             window.open(`print_engine.php?doc=${docType}&id=${refId}`, 'PrintWindow', 'width=400,height=600');
         }
 
-        // --- 2. Auto Print Trigger for New Jobs ---
         <?php if (isset($_GET['print_id']) && !empty($_GET['print_id'])): ?>
             openPrintEngine('job_sticker', <?= intval($_GET['print_id']) ?>);
             if (window.history.replaceState) {
@@ -962,7 +1137,7 @@ if ($view === 'services') {
             }
         <?php endif; ?>
 
-        // --- 3. Rate Auto Fill ---
+        // --- Rate Auto Fill ---
         const lastRates = <?php echo json_encode($last_rates); ?>;
 
         function autoFillRate() {
@@ -979,7 +1154,7 @@ if ($view === 'services') {
             document.getElementById('t_disp').value = "₹ " + (w * r).toFixed(2);
         }
 
-        // --- 4. Customer Live Search ---
+        // --- Customer Live Search ---
         const sInput = document.getElementById('c_search');
         const sList = document.getElementById('c_list');
         const idInput = document.getElementById('c_id');
@@ -1017,7 +1192,7 @@ if ($view === 'services') {
             sList.style.display = 'none';
         }
 
-        // --- 5. EDIT JOB WORK JS ---
+        // --- EDIT JOB WORK JS ---
         function editJobWork(data) {
             document.getElementById('ej_id').value = data.id;
             document.getElementById('ej_cust').value = data.customer_name;
@@ -1030,6 +1205,18 @@ if ($view === 'services') {
 
         function closeEditJob() {
             document.getElementById('editJobModal').classList.remove('active');
+        }
+
+        // --- EDIT SALES ORDER JS ---
+        function editSalesOrder(data) {
+            document.getElementById('eso_id').value = data.id;
+            document.getElementById('eso_status').value = data.status;
+            document.getElementById('eso_pstatus').value = data.payment_status;
+            document.getElementById('editSalesOrderModal').classList.add('active');
+        }
+
+        function closeEditSalesOrder() {
+            document.getElementById('editSalesOrderModal').classList.remove('active');
         }
 
         // --- GLOBAL ORDER VIEWER JS ---
@@ -1054,10 +1241,43 @@ if ($view === 'services') {
             document.getElementById('globalOrderModal').classList.remove('active');
         }
 
+        // --- RETURN ITEM LOGIC ---
+        function openReturnModal(orderId) {
+            const modal = document.getElementById('returnItemModal');
+            document.getElementById('ret_order_id').value = orderId;
+            const select = document.getElementById('ret_item_select');
+
+            select.innerHTML = '<option>Loading...</option>';
+            modal.classList.add('active');
+
+            fetch(`ajax_order_details.php?id=${orderId}&get_json=1`)
+                .then(r => r.json())
+                .then(items => {
+                    if (items.length === 0) {
+                        select.innerHTML = '<option value="">No items found</option>';
+                    } else {
+                        let html = '';
+                        items.forEach(i => {
+                            html += `<option value="${i.product_id}">${i.name} (Bought: ${i.qty})</option>`;
+                        });
+                        select.innerHTML = html;
+                    }
+                }).catch(err => {
+                    select.innerHTML = '<option value="">Failed to load items. View details first.</option>';
+                });
+        }
+
+        function closeReturnModal() {
+            document.getElementById('returnItemModal').classList.remove('active');
+        }
+
+
         // Close modals when clicking outside
         window.onclick = function(event) {
             if (event.target == document.getElementById('globalOrderModal')) closeGlobalOrder();
             if (event.target == document.getElementById('editJobModal')) closeEditJob();
+            if (event.target == document.getElementById('editSalesOrderModal')) closeEditSalesOrder();
+            if (event.target == document.getElementById('returnItemModal')) closeReturnModal();
         }
     </script>
 </body>

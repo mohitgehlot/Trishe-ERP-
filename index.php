@@ -37,6 +37,33 @@ function getDashboardData($conn)
   $revenue_query = mysqli_query($conn, "SELECT COALESCE(SUM(total),0) as revenue FROM orders WHERE payment_status = 'paid'");
   $data['revenue'] = mysqli_fetch_assoc($revenue_query)['revenue'];
 
+  // 🌟 NEW: TODAY'S SALE & PROFIT LOGIC 🌟
+  // 1. Today's Product Sales & COGS
+  $td_sales_sql = "
+      SELECT 
+          COALESCE(SUM(oi.line_total), 0) as today_sales_rev,
+          COALESCE(SUM(oi.qty * p.cost_price), 0) as today_cogs
+      FROM order_items oi
+      JOIN orders o ON oi.order_id = o.id
+      JOIN products p ON oi.product_id = p.id
+      WHERE o.status != 'Cancelled' AND DATE(o.created_at) = CURDATE()
+  ";
+  $td_sales_data = mysqli_fetch_assoc(mysqli_query($conn, $td_sales_sql));
+
+  // 2. Today's Job Work Revenue
+  $td_job_sql = "SELECT COALESCE(SUM(total_amount), 0) as today_job_rev FROM service_orders WHERE status != 'Cancelled' AND DATE(service_date) = CURDATE()";
+  $td_job_data = mysqli_fetch_assoc(mysqli_query($conn, $td_job_sql));
+
+  // 3. Final Calculations
+  $total_today_revenue = $td_sales_data['today_sales_rev'] + $td_job_data['today_job_rev'];
+  $today_profit = $total_today_revenue - $td_sales_data['today_cogs']; // Revenue - Cost
+
+  $data['today_profit_data'] = [
+    'today_sales' => $total_today_revenue,
+    'today_profit' => $today_profit
+  ];
+  // 🌟 END NEW LOGIC 🌟
+
   // --- SMART CHECK FOR MIN STOCK LEVEL ---
   $check_col = mysqli_query($conn, "SHOW COLUMNS FROM seeds_master LIKE 'min_stock_level'");
   $min_stock_val = (mysqli_num_rows($check_col) > 0) ? "min_stock_level" : "50"; // Use 50 if column doesn't exist

@@ -14,11 +14,11 @@ function formatCurrency($amount)
 }
 
 // =======================================================
-// 1. FETCH FINANCIAL DATA (LIFETIME OR FILTERED BY MONTH)
+// 1. FETCH FINANCIAL DATA (LIFETIME OR FILTERED BY YEAR)
 // =======================================================
 
-// Default is Current Year, but you can add month filters later
-$year = date('Y');
+// 🌟 NEW: Get selected year from URL, default to Current Year 🌟
+$year = isset($_GET['year']) ? intval($_GET['year']) : date('Y');
 
 // 🌟 A1. PRODUCT SALES REVENUE & COGS 🌟
 $sales_sql = "
@@ -239,6 +239,17 @@ $total_funds = $conn->query($funds_sql)->fetch_assoc()['total_funds'] ?? 0;
             font-size: 0.95rem !important;
         }
 
+        /* Year Filter Select */
+        .year-select {
+            background: transparent;
+            border: none;
+            font-weight: 800;
+            color: #3730a3;
+            font-size: 1.1rem;
+            outline: none;
+            cursor: pointer;
+        }
+
         /* Responsive */
         @media (max-width: 1024px) {
             .split-grid {
@@ -304,9 +315,20 @@ $total_funds = $conn->query($funds_sql)->fetch_assoc()['total_funds'] ?? 0;
 
         <div class="page-header-box">
             <h1 class="page-title"><i class="fas fa-chart-pie text-primary"></i> Business Analytics (P&L)</h1>
-            <div style="background: #e0e7ff; color: #3730a3; padding: 8px 20px; border-radius: 20px; font-weight: 800; border: 1px solid #c7d2fe; letter-spacing: 0.5px;">
-                FY <?= $year ?>
-            </div>
+
+            <form method="GET" style="display: flex; align-items: center; gap: 10px; background: #e0e7ff; padding: 8px 20px; border-radius: 20px; border: 1px solid #c7d2fe;">
+                <label style="color: #3730a3; font-weight: 800; font-size: 0.95rem; letter-spacing: 0.5px;">VIEW YEAR:</label>
+                <select name="year" class="year-select" onchange="this.form.submit()">
+                    <?php
+                    // Generate year options dynamically from 2024 to Current Year + 1
+                    $current_yr = date('Y');
+                    for ($y = $current_yr + 1; $y >= 2024; $y--) {
+                        $selected = ($y == $year) ? 'selected' : '';
+                        echo "<option value='$y' $selected>FY $y</option>";
+                    }
+                    ?>
+                </select>
+            </form>
         </div>
 
         <div class="metrics-grid">

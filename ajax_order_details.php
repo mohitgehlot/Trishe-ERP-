@@ -30,6 +30,16 @@ $items_sql = "SELECT oi.*, p.name as product_name
               LEFT JOIN products p ON oi.product_id = p.id 
               WHERE oi.order_id = $order_id";
 $items_res = $conn->query($items_sql);
+if (isset($_GET['get_json'])) {
+    include 'config.php';
+    $id = intval($_GET['id']);
+    $items = [];
+    $res = $conn->query("SELECT oi.product_id, oi.qty, p.name FROM order_items oi JOIN products p ON oi.product_id = p.id WHERE oi.order_id = $id");
+    if($res) while($r = $res->fetch_assoc()) $items[] = $r;
+    header('Content-Type: application/json');
+    echo json_encode($items);
+    exit;
+}
 ?>
 
 <div style="font-family: 'Inter', sans-serif; color: #334155;">

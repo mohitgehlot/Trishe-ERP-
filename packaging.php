@@ -1,5 +1,5 @@
 <?php
-// packaging.php - STRICT ROLLBACK & MASTER CSS SYNCED (Create Size Removed)
+// packaging.php - STRICT ROLLBACK & MASTER CSS SYNCED (FIXED FOR CAKE PACKING)
 ob_start();
 include 'config.php';
 session_start();
@@ -14,9 +14,7 @@ if (!isset($_SESSION['admin_id'])) {
 // ==========================================
 if (isset($_GET['delete_size'])) {
     $del_id = intval($_GET['delete_size']);
-    // Recipe se packing link hatao
     $conn->query("DELETE FROM product_recipes WHERE raw_material_id = $del_id AND item_type = 'PACKING'");
-    // Product ko inactive karo (taaki purani reports kharab na ho)
     $conn->query("UPDATE products SET is_active = 0 WHERE id = $del_id");
     header("Location: packaging.php?msg=deleted");
     exit;
@@ -35,20 +33,23 @@ if (isset($_POST['action'])) {
         $pack_qty = intval($_POST['qty']);
 
         try {
-            $p_res = $conn->query("SELECT weight, seed_id FROM products WHERE id = $prod_id");
+            $p_res = $conn->query("SELECT weight, seed_id, product_type FROM products WHERE id = $prod_id");
             $prod = $p_res->fetch_assoc();
 
-            $required_oil = floatval($prod['weight'] ?? 0) * $pack_qty;
+            $required_rm = floatval($prod['weight'] ?? 0) * $pack_qty;
             $seed_id = intval($prod['seed_id'] ?? 0);
 
-            $avail_oil = 0;
+            // 🌟 FIXED: Determine if it's Oil or Cake based on Product Type 🌟
+            $p_type = strtoupper($prod['product_type'] ?? 'OIL');
+
+            $avail_rm = 0;
             if ($seed_id > 0) {
-                $oil_sql = "SELECT SUM(CASE WHEN transaction_type IN ('RAW_IN','ADJUSTMENT_IN') THEN quantity WHEN transaction_type IN ('RAW_OUT','ADJUSTMENT_OUT') THEN -quantity ELSE 0 END) as net_oil FROM raw_material_inventory WHERE seed_id = $seed_id AND product_type = 'OIL'";
-                $avail_oil = floatval($conn->query($oil_sql)->fetch_assoc()['net_oil'] ?? 0);
+                $rm_sql = "SELECT SUM(CASE WHEN transaction_type IN ('RAW_IN','ADJUSTMENT_IN') THEN quantity WHEN transaction_type IN ('RAW_OUT','ADJUSTMENT_OUT') THEN -quantity ELSE 0 END) as net_rm FROM raw_material_inventory WHERE seed_id = $seed_id AND product_type = '$p_type'";
+                $avail_rm = floatval($conn->query($rm_sql)->fetch_assoc()['net_rm'] ?? 0);
             }
 
             $packaging_status = [];
-            $can_produce = ($seed_id > 0 && $avail_oil >= $required_oil);
+            $can_produce = ($seed_id > 0 && $avail_rm >= $required_rm);
 
             $sql_rec = "SELECT packaging_id, qty_needed FROM product_recipes WHERE raw_material_id = $prod_id AND item_type = 'PACKING'";
             $res_rec = $conn->query($sql_rec);
@@ -82,12 +83,15 @@ if (isset($_POST['action'])) {
                 $can_produce = false;
             }
 
+            $material_name = ($p_type == 'CAKE') ? "Raw Loose Khali" : "Raw Loose Oil";
+
             echo json_encode([
                 'success' => true,
                 'oil' => [
-                    'needed' => $required_oil,
-                    'stock' => $avail_oil,
-                    'status' => ($avail_oil >= $required_oil)
+                    'name' => $material_name,
+                    'needed' => $required_rm,
+                    'stock' => $avail_rm,
+                    'status' => ($avail_rm >= $required_rm)
                 ],
                 'packaging' => $packaging_status,
                 'can_produce' => $can_produce,
@@ -119,24 +123,24 @@ if (isset($_POST['save_production'])) {
     }
 
     try {
-        // 🌟 Transaction Shuru (Lock the database state)
         $conn->begin_transaction();
 
-        $prod = $conn->query("SELECT weight, seed_id FROM products WHERE id = $prod_id")->fetch_assoc();
+        $prod = $conn->query("SELECT weight, seed_id, product_type FROM products WHERE id = $prod_id")->fetch_assoc();
         if (!$prod) {
             throw new Exception("Product details not found.");
         }
 
-        $oil_to_deduct = floatval($prod['weight']) * $qty;
+        $rm_to_deduct = floatval($prod['weight']) * $qty;
         $seed_id = intval($prod['seed_id']);
+        $p_type = strtoupper($prod['product_type'] ?? 'OIL'); // Can be OIL or CAKE
 
-        // 🌟 STEP 1: DEDUCT LOOSE OIL
-        $stmtOil = $conn->prepare("INSERT INTO raw_material_inventory (seed_id, product_type, batch_no, quantity, unit, transaction_type, source_type, notes, transaction_date, created_by) VALUES (?, 'OIL', ?, ?, 'KG', 'RAW_OUT', 'PRODUCTION', 'Used for Batch $batch_no', NOW(), ?)");
-        if (!$stmtOil) throw new Exception("Database prepare error (Oil).");
+        // 🌟 STEP 1: DEDUCT LOOSE MATERIAL 🌟
+        $stmtRM = $conn->prepare("INSERT INTO raw_material_inventory (seed_id, product_type, batch_no, quantity, unit, transaction_type, source_type, notes, created_at, created_by) VALUES (?, ?, ?, ?, 'KG', 'RAW_OUT', 'PRODUCTION', 'Used for Batch $batch_no', NOW(), ?)");
+        if (!$stmtRM) throw new Exception("Database prepare error (RM): " . $conn->error);
 
-        $stmtOil->bind_param("isdi", $seed_id, $batch_no, $oil_to_deduct, $admin_id);
-        if (!$stmtOil->execute()) {
-            throw new Exception("Failed to deduct Loose Oil: " . $stmtOil->error);
+        $stmtRM->bind_param("issdi", $seed_id, $p_type, $batch_no, $rm_to_deduct, $admin_id);
+        if (!$stmtRM->execute()) {
+            throw new Exception("Failed to deduct Loose Material: " . $stmtRM->error);
         }
 
         // 🌟 STEP 2: DEDUCT PACKAGING MATERIAL
@@ -158,14 +162,12 @@ if (isset($_POST['save_production'])) {
 
         $stmtFG->bind_param("isis", $prod_id, $batch_no, $qty, $mfg_date);
         if (!$stmtFG->execute()) {
-            throw new Exception("Failed to save Packed Bottles in stock: " . $stmtFG->error);
+            throw new Exception("Failed to save Packed items in stock: " . $stmtFG->error);
         }
 
-        // 🌟 FINAL STEP: ALL GOOD, SAVE IT! (Commit)
         $conn->commit();
         echo json_encode(['success' => true, 'message' => "Production successfully saved & stock accurately updated!"]);
     } catch (Exception $e) {
-        // 🌟 REVERT EVERYTHING (Rollback) agar Exception hit hua
         $conn->rollback();
         echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
@@ -176,7 +178,8 @@ if (isset($_POST['save_production'])) {
 // FETCH DATA FOR HTML
 // ----------------------------------------------------
 $products = [];
-$res = $conn->query("SELECT p.id, p.name, p.weight, p.seed_id FROM products p WHERE p.is_active = 1 AND p.product_type = 'oil' ORDER BY p.name");
+// 🌟 FIXED: SHOW BOTH OIL & CAKE PRODUCTS IN DROPDOWN 🌟
+$res = $conn->query("SELECT p.id, p.name, p.weight, p.seed_id, p.product_type FROM products p WHERE p.is_active = 1 AND p.product_type IN ('oil', 'cake') ORDER BY p.name");
 if ($res) while ($r = $res->fetch_assoc()) $products[] = $r;
 
 $saved_sizes = [];
@@ -254,7 +257,6 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
             margin-bottom: 20px;
         }
 
-        /* Requirement Table */
         .req-box {
             background: #f8fafc;
             border: 1px dashed var(--border);
@@ -359,7 +361,7 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
                                     <option value="">-- Choose Product --</option>
                                     <?php foreach ($products as $p): ?>
                                         <option value="<?= $p['id'] ?>">
-                                            <?= htmlspecialchars($p['name']) ?> (<?= floatval($p['weight']) ?> Kg Oil)
+                                            <?= htmlspecialchars($p['name']) ?> (<?= floatval($p['weight']) ?> Kg <?= strtoupper($p['product_type'] == 'cake' ? 'Cake' : 'Oil') ?>)
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
@@ -411,7 +413,7 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
                         <thead>
                             <tr>
                                 <th>Product Name</th>
-                                <th>Total Oil Content (Kg)</th>
+                                <th>Total Content (Kg)</th>
                                 <th>Linked Container(s)</th>
                                 <th style="text-align:right;">Action</th>
                             </tr>
@@ -479,7 +481,7 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
                     if (res.success) {
                         let html = `
                         <tr style="background:#fff7ed;">
-                            <td style="color:var(--warning); font-weight:700;"><i class="fas fa-tint"></i> Raw Loose Oil</td>
+                            <td style="color:var(--warning); font-weight:700;"><i class="fas fa-tint"></i> ${res.oil.name}</td>
                             <td style="font-weight:600;">${res.oil.needed.toFixed(3)} Kg</td>
                             <td style="font-weight:600;">${parseFloat(res.oil.stock).toFixed(3)} Kg</td>
                             <td class="${res.oil.status ? 'status-ok' : 'status-fail'}">${res.oil.status ? '✅ OK' : '❌ SHORT'}</td>
@@ -497,7 +499,7 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
                             });
                         } else {
                             if (res.no_recipe) {
-                                html += `<tr><td colspan="4" style="color:var(--warning); background:#fffbeb; padding:15px; border-radius:6px; text-align:center;"><b>⚠️ No Container Linked!</b> Delete this product below and recreate it, or link a container from the BOM page.</td></tr>`;
+                                html += `<tr><td colspan="4" style="color:var(--warning); background:#fffbeb; padding:15px; border-radius:6px; text-align:center;"><b>⚠️ No Container Linked!</b> Please link a container from the BOM page.</td></tr>`;
                             }
                         }
 
@@ -519,7 +521,7 @@ if ($res_sizes) while ($row = $res_sizes->fetch_assoc()) $saved_sizes[] = $row;
         // --- SUBMIT PRODUCTION ---
         document.getElementById('prodForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            if (!confirm("Confirm production? Raw Oil and Empty Containers will be deducted immediately.")) return;
+            if (!confirm("Confirm production? Raw Material and Empty Containers will be deducted immediately.")) return;
 
             const btn = document.getElementById('saveBtn');
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';

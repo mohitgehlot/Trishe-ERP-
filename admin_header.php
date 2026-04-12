@@ -453,34 +453,27 @@ if ($res_ven_global) while ($row = $res_ven_global->fetch_assoc()) $global_vendo
                     <li><a href="forecasting.php" class="sub-item <?= isChildActive('forecasting.php') ?>"><span>Product Recipes</span></a></li>
                 </ul>
             </li>
-            <?php
-            $rep_pages = ['expenses.php', 'admin_reports.php', 'financial_analytics.php'];
+           <?php
+            
+            $rep_pages = ['expenses.php', 'finance.php', 'admin_reports.php', 'financial_analytics.php'];
             $rep_open = isParentOpen($rep_pages);
             ?>
             <li>
                 <div class="nav-link <?= $rep_open ?>" onclick="toggleMenu(this)">
                     <div class="nav-content">
                         <i class="fas fa-chart-pie icon"></i>
-                        <span>Finance</span>
+                        <span>Finance & Banking</span>
                     </div>
                     <i class="fas fa-chevron-down arrow"></i>
                 </div>
                 <ul class="submenu <?= $rep_open ? 'show' : '' ?>">
+                    <li><a href="finance.php" class="sub-item <?= isChildActive('finance.php') ?>"><span>Banking & Passbook</span></a></li>
+                    
                     <li><a href="expenses.php" class="sub-item <?= isChildActive('expenses.php') ?>"><span>Expenses</span></a></li>
                     <li><a href="admin_reports.php" class="sub-item <?= isChildActive('admin_reports.php') ?>"><span>Admin Reports</span></a></li>
                     <li><a href="financial_analytics.php" class="sub-item <?= isChildActive('financial_analytics.php') ?>"><span>Financial Analytics</span></a></li>
                 </ul>
             </li>
-
-            <li>
-                <a href="suppliers.php" class="nav-link <?= isChildActive('suppliers.php') ?>">
-                    <div class="nav-content">
-                        <i class="fas fa-truck icon"></i>
-                        <span>Suppliers</span>
-                    </div>
-                </a>
-            </li>
-
             <?php
             $rep_pages = ['admin_users.php', 'daily_prices.php', 'print_builder.php', 'profile.php'];
             $rep_open = isParentOpen($rep_pages);
